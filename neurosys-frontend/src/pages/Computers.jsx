@@ -175,57 +175,44 @@ const Computers = () => {
         </div>
       </div>
 
-      {/* Global Bulk Power Control Bar (Lab-Wide Power Actions) */}
+      {/* Selected System Power Control Bar */}
       <div className="p-4 bg-slate-900 text-white rounded-xl shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Power className="w-6 h-6 text-red-400" />
           <div>
-            <h3 className="text-sm font-extrabold text-white">Lab-Wide Bulk Power Controls</h3>
-            <p className="text-xs text-slate-400 font-medium">Perform instant remote power actions on all workstations or selected checkboxes</p>
+            <h3 className="text-sm font-extrabold text-white">Selected System Remote Power Management</h3>
+            <p className="text-xs text-slate-400 font-medium">Select workstation checkboxes in the table below to execute targeted remote power actions</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Selected Workstation Power Actions */}
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 border-r border-slate-700 pr-3 mr-1">
-              <span className="text-xs font-extrabold text-amber-400">{selectedIds.length} Selected:</span>
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 ? (
+            <div className="flex items-center gap-2 animate-fade-in-up">
+              <span className="text-xs font-extrabold text-amber-400 mr-2">{selectedIds.length} Workstation(s) Selected</span>
               <button
                 onClick={() => handleTriggerSelectedPowerAction('LOCK')}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-400" /> Lock ({selectedIds.length})
+                <Lock className="w-4 h-4 text-amber-400" /> Lock Selected ({selectedIds.length})
               </button>
               <button
                 onClick={() => handleTriggerSelectedPowerAction('RESTART')}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Restart ({selectedIds.length})
+                <RotateCcw className="w-4 h-4" /> Restart Selected ({selectedIds.length})
               </button>
               <button
                 onClick={() => handleTriggerSelectedPowerAction('SHUTDOWN')}
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
               >
-                <Power className="w-3.5 h-3.5" /> Shutdown ({selectedIds.length})
+                <Power className="w-4 h-4" /> Shutdown Selected ({selectedIds.length})
               </button>
             </div>
+          ) : (
+            <div className="text-xs font-semibold text-slate-400 italic bg-slate-800/60 px-4 py-2 rounded-lg border border-slate-700/60">
+              Select checkbox(es) in the table below to enable Selected System Shutdown
+            </div>
           )}
-
-          {/* All Workstations Power Actions */}
-          <button
-            onClick={() => handleTriggerBulkAllPowerAction('RESTART')}
-            className="px-4 py-2 bg-slate-800 hover:bg-amber-600 text-white border border-slate-700 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-          >
-            <RotateCcw className="w-4 h-4 text-amber-400" />
-            <span>Restart ALL Workstations</span>
-          </button>
-          <button
-            onClick={() => handleTriggerBulkAllPowerAction('SHUTDOWN')}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-          >
-            <Power className="w-4 h-4" />
-            <span>Shutdown ALL Workstations</span>
-          </button>
         </div>
       </div>
 
