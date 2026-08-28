@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   ArrowUpDown,
   RefreshCw,
-  X
+  X,
+  Monitor,
+  CheckCircle2
 } from 'lucide-react';
 
 const Computers = () => {
@@ -33,9 +35,9 @@ const Computers = () => {
   const [sortBy, setSortBy] = useState('hostname');
   const [sortOrder, setSortOrder] = useState('asc');
 
-  // Bulk Actions Modal
+  // Selection & Power Modal State
   const [selectedIds, setSelectedIds] = useState([]);
-  const [powerModal, setPowerModal] = useState({ open: false, action: null });
+  const [powerModal, setPowerModal] = useState({ open: false, action: null, targetCount: 0 });
   const [actionStatusMsg, setActionStatusMsg] = useState('');
 
   useEffect(() => {
@@ -100,7 +102,7 @@ const Computers = () => {
       return 0;
     });
 
-  // Checkbox handlers
+  // Checkbox Selection Handlers
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedIds(filteredComputers.map((c) => c.id));
@@ -117,45 +119,114 @@ const Computers = () => {
     }
   };
 
-  const handleTriggerBulkAction = (action) => {
+  // Power Action Triggers
+  const handleTriggerSelectedPowerAction = (action) => {
     if (selectedIds.length === 0) return;
-    setPowerModal({ open: true, action });
+    setPowerModal({ open: true, action, targetCount: selectedIds.length, targetIds: selectedIds });
+  };
+
+  const handleTriggerBulkAllPowerAction = (action) => {
+    const allIds = computers.map(c => c.id);
+    if (allIds.length === 0) return;
+    setPowerModal({ open: true, action, targetCount: allIds.length, targetIds: allIds });
+  };
+
+  const handleTriggerSinglePowerAction = (compId, action) => {
+    setPowerModal({ open: true, action, targetCount: 1, targetIds: [compId] });
   };
 
   const handleExecutePowerAction = async () => {
-    setActionStatusMsg(`${powerModal.action} command sent to ${selectedIds.length} workstations...`);
+    const idsToProcess = powerModal.targetIds || selectedIds;
+    setActionStatusMsg(`Sending ${powerModal.action} command to ${idsToProcess.length} workstation(s)...`);
     try {
-      await Promise.all(selectedIds.map(id => metricsService.remoteAction(id, powerModal.action.toLowerCase()).catch(() => null)));
+      await Promise.all(idsToProcess.map(id => metricsService.remoteAction(id, powerModal.action.toLowerCase()).catch(() => null)));
+      setActionStatusMsg(`✓ ${powerModal.action} command successfully issued!`);
       setTimeout(() => {
-        setPowerModal({ open: false, action: null });
+        setPowerModal({ open: false, action: null, targetCount: 0 });
         setSelectedIds([]);
         setActionStatusMsg('');
         fetchComputers();
       }, 1200);
     } catch (e) {
       console.error('Error executing power action', e);
-      setPowerModal({ open: false, action: null });
+      setPowerModal({ open: false, action: null, targetCount: 0 });
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Top Header */}
+      {/* Top Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest border border-slate-200 p-6 rounded-xl shadow-sm">
         <div>
           <h1 className="font-display text-display text-slate-900 tracking-tight font-extrabold">Computer Lab Workstations</h1>
           <p className="font-body-md text-body-md text-slate-700 mt-1 font-medium">
-            Manage all active computers in your college computer lab.
+            Manage all active computers in your college computer lab with live 1s telemetry and remote power management.
           </p>
         </div>
 
-        <button
-          onClick={handleRefresh}
-          className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 hover:bg-slate-100 hover:text-primary transition-colors flex items-center gap-2 text-xs font-bold shadow-sm cursor-pointer"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
-          <span>Refresh Fleet</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 hover:bg-slate-100 hover:text-primary transition-colors flex items-center gap-2 text-xs font-bold shadow-sm cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+            <span>Refresh Fleet</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Global Bulk Power Control Bar (Lab-Wide Power Actions) */}
+      <div className="p-4 bg-slate-900 text-white rounded-xl shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Power className="w-6 h-6 text-red-400" />
+          <div>
+            <h3 className="text-sm font-extrabold text-white">Lab-Wide Bulk Power Controls</h3>
+            <p className="text-xs text-slate-400 font-medium">Perform instant remote power actions on all workstations or selected checkboxes</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Selected Workstation Power Actions */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-2 border-r border-slate-700 pr-3 mr-1">
+              <span className="text-xs font-extrabold text-amber-400">{selectedIds.length} Selected:</span>
+              <button
+                onClick={() => handleTriggerSelectedPowerAction('LOCK')}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-400" /> Lock ({selectedIds.length})
+              </button>
+              <button
+                onClick={() => handleTriggerSelectedPowerAction('RESTART')}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Restart ({selectedIds.length})
+              </button>
+              <button
+                onClick={() => handleTriggerSelectedPowerAction('SHUTDOWN')}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+              >
+                <Power className="w-3.5 h-3.5" /> Shutdown ({selectedIds.length})
+              </button>
+            </div>
+          )}
+
+          {/* All Workstations Power Actions */}
+          <button
+            onClick={() => handleTriggerBulkAllPowerAction('RESTART')}
+            className="px-4 py-2 bg-slate-800 hover:bg-amber-600 text-white border border-slate-700 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <RotateCcw className="w-4 h-4 text-amber-400" />
+            <span>Restart ALL Workstations</span>
+          </button>
+          <button
+            onClick={() => handleTriggerBulkAllPowerAction('SHUTDOWN')}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <Power className="w-4 h-4" />
+            <span>Shutdown ALL Workstations</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Toolbar */}
@@ -197,25 +268,6 @@ const Computers = () => {
             <option value="ATTENTION">Needs Attention</option>
           </select>
         </div>
-
-        {/* Bulk Action Buttons */}
-        {selectedIds.length > 0 && (
-          <div className="flex items-center gap-2 animate-fade-in-up">
-            <span className="text-xs font-bold text-primary mr-1">{selectedIds.length} Selected</span>
-            <button
-              onClick={() => handleTriggerBulkAction('RESTART')}
-              className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all cursor-pointer shadow-sm flex items-center gap-1"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Restart
-            </button>
-            <button
-              onClick={() => handleTriggerBulkAction('SHUTDOWN')}
-              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-all cursor-pointer shadow-sm flex items-center gap-1"
-            >
-              <Power className="w-3.5 h-3.5" /> Shutdown
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Computers Fleet Table */}
@@ -228,7 +280,7 @@ const Computers = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[750px]">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-slate-100 border-b border-slate-200 text-label-md font-label-md text-slate-900 font-extrabold">
                 <th className="p-3 w-10">
@@ -245,7 +297,7 @@ const Computers = () => {
                 <th className="p-3">CPU %</th>
                 <th className="p-3">RAM %</th>
                 <th className="p-3">Storage %</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right">Quick Power Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-body-md text-body-md text-slate-800 font-medium">
@@ -286,12 +338,35 @@ const Computers = () => {
                       <td className="p-3 font-mono-sm font-bold text-emerald-700">{ram}%</td>
                       <td className="p-3 font-mono-sm font-bold text-slate-700">{disk}%</td>
                       <td className="p-3 text-right">
-                        <button
-                          onClick={() => navigate(`/computers/${comp.id}`)}
-                          className="px-3 py-1 text-xs font-bold rounded border border-slate-300 hover:border-primary hover:text-primary transition-colors bg-white cursor-pointer text-slate-800"
-                        >
-                          View Telemetry
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleTriggerSinglePowerAction(comp.id, 'LOCK')}
+                            className="p-1.5 text-slate-700 hover:bg-slate-100 rounded border border-slate-300 transition-colors cursor-pointer"
+                            title="Lock Computer Screen"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                          </button>
+                          <button
+                            onClick={() => handleTriggerSinglePowerAction(comp.id, 'RESTART')}
+                            className="p-1.5 text-amber-700 hover:bg-amber-50 rounded border border-amber-300 transition-colors cursor-pointer"
+                            title="Restart Computer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleTriggerSinglePowerAction(comp.id, 'SHUTDOWN')}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-300 transition-colors cursor-pointer"
+                            title="Shutdown Computer"
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => navigate(`/computers/${comp.id}`)}
+                            className="px-2.5 py-1 text-xs font-bold rounded border border-slate-300 hover:border-primary hover:text-primary transition-colors bg-white cursor-pointer text-slate-800 ml-1"
+                          >
+                            View Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -308,17 +383,17 @@ const Computers = () => {
         </div>
       </div>
 
-      {/* Bulk Action Modal */}
+      {/* Confirmation Power Action Modal */}
       {powerModal.open && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-headline-md font-bold text-slate-900 flex items-center gap-2">
-                <Power className="w-5 h-5 text-primary" />
+                <Power className="w-5 h-5 text-red-600" />
                 Confirm {powerModal.action} Command
               </h3>
               <button 
-                onClick={() => setPowerModal({ open: false, action: null })}
+                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0 })}
                 className="p-1 rounded text-slate-500 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -326,25 +401,25 @@ const Computers = () => {
             </div>
 
             <p className="text-body-md text-slate-700 font-medium">
-              Are you sure you want to send <strong className="text-primary font-bold">{powerModal.action}</strong> command to <strong className="text-slate-900 font-bold">{selectedIds.length}</strong> selected workstations?
+              Are you sure you want to send <strong className="text-red-600 font-bold">{powerModal.action}</strong> command to <strong className="text-slate-900 font-bold">{powerModal.targetCount}</strong> workstation(s)?
             </p>
 
             {actionStatusMsg && (
-              <div className="p-3 bg-primary-container/10 border border-primary/20 rounded-lg text-xs font-bold text-primary">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800">
                 {actionStatusMsg}
               </div>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button 
-                onClick={() => setPowerModal({ open: false, action: null })}
+                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0 })}
                 className="px-4 py-2 rounded-lg border border-slate-300 text-slate-800 hover:bg-slate-100 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleExecutePowerAction}
-                className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer shadow-sm"
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer shadow-sm"
               >
                 Send {powerModal.action} Command
               </button>
