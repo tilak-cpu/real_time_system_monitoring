@@ -19,7 +19,7 @@ const AdminLaptopPerformance = () => {
 
   useEffect(() => {
     fetchLaptopData();
-    const interval = setInterval(fetchLaptopData, 2000); // 2-Second Live Stream
+    const interval = setInterval(fetchLaptopData, 1000); // 1-Second Live Stream
     return () => clearInterval(interval);
   }, []);
 
@@ -113,7 +113,7 @@ const AdminLaptopPerformance = () => {
                 {laptop.status || 'ONLINE'}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 animate-pulse">
-                LIVE 2s Stream
+                LIVE 1s Stream
               </span>
             </div>
             <p className="text-xs text-secondary font-mono mt-1">
@@ -143,10 +143,10 @@ const AdminLaptopPerformance = () => {
         <div className="flex items-center justify-between border-b border-outline-variant pb-3">
           <div>
             <h3 className="text-headline-md font-headline-md font-bold text-on-surface">Laptop Real-Time Telemetry Stream</h3>
-            <p className="text-body-md font-body-md text-secondary mt-0.5">Live CPU % and RAM % utilization graph updated every 2 seconds</p>
+            <p className="text-body-md font-body-md text-secondary mt-0.5">Live CPU % and RAM % utilization graph updated every 1 second</p>
           </div>
           <span className="px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-mono-sm font-mono-sm font-bold">
-            2s Live Sampling
+            1s Live Sampling
           </span>
         </div>
 

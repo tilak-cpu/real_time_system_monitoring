@@ -40,7 +40,7 @@ const Computers = () => {
 
   useEffect(() => {
     fetchComputers();
-    const interval = setInterval(fetchComputers, 4000);
+    const interval = setInterval(fetchComputers, 1000);
     return () => clearInterval(interval);
   }, []);
 

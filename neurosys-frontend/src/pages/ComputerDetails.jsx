@@ -35,7 +35,7 @@ const ComputerDetails = () => {
 
   useEffect(() => {
     fetchComputerDetails();
-    const interval = setInterval(fetchComputerDetails, 4000);
+    const interval = setInterval(fetchComputerDetails, 1000);
     return () => clearInterval(interval);
   }, [id, selectedTimeRange]);
 
