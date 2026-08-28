@@ -73,6 +73,10 @@ export const metricsService = {
     const endpoint = (commandType || 'SHUTDOWN').toLowerCase();
     return api.post(`/computers/${computerId}/${endpoint}`, {});
   },
+  remoteAction: async (computerId, commandType) => {
+    const endpoint = (commandType || 'SHUTDOWN').toLowerCase();
+    return api.post(`/computers/${computerId}/${endpoint}`, {});
+  },
   getPowerAudits: async (computerId) => fetchRealApi(`/computers/${computerId}/power-audits`),
 
   // AI Performance, Prediction & Diagnosis APIs

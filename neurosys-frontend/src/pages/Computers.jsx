@@ -139,7 +139,7 @@ const Computers = () => {
     const idsToProcess = powerModal.targetIds || selectedIds;
     setActionStatusMsg(`Sending ${powerModal.action} command to ${idsToProcess.length} workstation(s)...`);
     try {
-      await Promise.all(idsToProcess.map(id => metricsService.remoteAction(id, powerModal.action.toLowerCase()).catch(() => null)));
+      await Promise.all(idsToProcess.map(id => metricsService.sendPowerCommand(id, powerModal.action)));
       setActionStatusMsg(`✓ ${powerModal.action} command successfully issued!`);
       setTimeout(() => {
         setPowerModal({ open: false, action: null, targetCount: 0 });
