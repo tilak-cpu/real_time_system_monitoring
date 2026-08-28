@@ -51,7 +51,7 @@ const Computers = () => {
       const data = await metricsService.getAllComputers();
       const compList = Array.isArray(data) ? data : (data?.data || []);
       if (Array.isArray(compList)) {
-        setComputers(compList);
+        setComputers([...compList]);
       }
     } catch (e) {
       console.error('Failed to fetch computer lab workstations', e);

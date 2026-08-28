@@ -120,9 +120,10 @@ public class SystemMetricsServiceImpl implements SystemMetricsService {
         }
 
         if (oldStatus != newStatus) {
-            log.info("[INFO] PC {} status changed {} → {}", computer.getHostname(), oldStatus, newStatus);
+            log.info("[INFO] PC {} status restored/changed {} → {}", computer.getHostname(), oldStatus, newStatus);
         }
         computer.setStatus(newStatus);
+        computer.setLastSeenAt(Instant.now());
         computer.setUpdatedAt(Instant.now());
         computerRepository.save(computer);
 
