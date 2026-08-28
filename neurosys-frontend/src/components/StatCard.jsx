@@ -2,32 +2,32 @@ import React from 'react';
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color = 'cyan', trend }) => {
   const colorMap = {
-    cyan: 'from-cyan-500/20 to-blue-500/10 border-cyan-500/30 text-cyan-400',
-    emerald: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-400',
-    amber: 'from-amber-500/20 to-yellow-500/10 border-amber-500/30 text-amber-400',
-    red: 'from-red-500/20 to-rose-500/10 border-red-500/30 text-red-400',
-    purple: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30 text-purple-400',
+    cyan: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    red: 'bg-red-50 border-red-200 text-red-700',
+    purple: 'bg-primary-container/20 border-primary/30 text-primary',
   };
 
   return (
-    <div className={`p-5 rounded-2xl glass-card border bg-gradient-to-br ${colorMap[color]} transition-all duration-300 hover:scale-[1.02]`}>
+    <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-md space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">{title}</span>
         {Icon && (
-          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div className={`p-2.5 rounded-xl font-bold ${colorMap[color]}`}>
             <Icon className="w-5 h-5" />
           </div>
         )}
       </div>
-      <div className="mt-3 flex items-baseline justify-between">
-        <h3 className="text-2xl font-bold text-slate-100 tracking-tight">{value}</h3>
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">{value}</h3>
         {trend && (
-          <span className={`text-xs font-medium ${trend.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`text-xs font-extrabold ${trend.startsWith('+') ? 'text-emerald-700' : 'text-red-600'}`}>
             {trend}
           </span>
         )}
       </div>
-      {subtitle && <p className="mt-1 text-xs text-slate-400 font-normal">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-slate-600 font-semibold">{subtitle}</p>}
     </div>
   );
 };

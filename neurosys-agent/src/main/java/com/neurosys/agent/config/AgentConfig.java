@@ -21,16 +21,29 @@ public class AgentConfig {
     private static String agentId;
 
     static {
-        // 1. Load agent.properties from classpath
-        try (InputStream input = AgentConfig.class.getClassLoader().getResourceAsStream("agent.properties")) {
-            if (input != null) {
+        // 1. Try loading external agent.properties from working directory first
+        File externalProps = new File("agent.properties");
+        if (externalProps.exists()) {
+            try (InputStream input = Files.newInputStream(externalProps.toPath())) {
                 properties.load(input);
+                log.info("Loaded agent.properties from external file: {}", externalProps.getAbsolutePath());
+            } catch (Exception e) {
+                log.warn("Could not load external agent.properties file", e);
             }
-        } catch (Exception e) {
-            log.error("Failed to load agent.properties from classpath", e);
+        }
+        
+        // 2. Fallback to classpath agent.properties if not already set
+        if (properties.isEmpty()) {
+            try (InputStream input = AgentConfig.class.getClassLoader().getResourceAsStream("agent.properties")) {
+                if (input != null) {
+                    properties.load(input);
+                }
+            } catch (Exception e) {
+                log.error("Failed to load agent.properties from classpath", e);
+            }
         }
 
-        // 2. Determine persistent Agent ID (across Windows reboots)
+        // 3. Determine persistent Agent ID (across Windows reboots)
         agentId = resolvePersistentAgentId();
     }
 
