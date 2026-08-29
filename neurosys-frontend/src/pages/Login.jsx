@@ -35,8 +35,16 @@ const Login = () => {
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white shadow-xl shadow-primary/25 mb-2">
-            <BrainCircuit className="w-9 h-9" />
+          <button 
+            onClick={() => navigate('/')}
+            className="text-xs font-bold text-primary hover:underline inline-flex items-center gap-1 mb-2 cursor-pointer"
+          >
+            ← Back to Home
+          </button>
+          <div className="flex justify-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white shadow-xl shadow-primary/25 mb-2">
+              <BrainCircuit className="w-9 h-9" />
+            </div>
           </div>
           <h1 className="font-display text-display font-bold text-on-surface tracking-tight">NeuroSys Admin</h1>
           <p className="font-body-md text-body-md text-secondary">

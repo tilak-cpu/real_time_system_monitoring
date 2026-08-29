@@ -17,12 +17,10 @@ export const AuthProvider = ({ children }) => {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        // Fallback
+        localStorage.removeItem('user');
       }
     }
-    // Default logged-in admin user so local dashboard works seamlessly
-    localStorage.setItem('user', JSON.stringify(DEFAULT_ADMIN_USER));
-    return DEFAULT_ADMIN_USER;
+    return null;
   });
 
   const [loading, setLoading] = useState(true);

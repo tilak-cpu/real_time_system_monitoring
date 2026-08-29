@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import Layout from './components/Layout';
+import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminLaptopPerformance from './pages/AdminLaptopPerformance';
@@ -23,11 +24,28 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function AppRoutes() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      {/* 1. Public Landing Page at "/" */}
+      <Route 
+        path="/" 
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />
+        } 
+      />
+
+      {/* 2. Login Page at "/login" */}
+      <Route 
+        path="/login" 
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />
+        } 
+      />
+
+      {/* 3. Protected Dashboard & Admin Pages */}
       <Route
-        path="/"
         element={
           <ProtectedRoute>
             <WebSocketProvider>
@@ -36,19 +54,23 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="admin-laptop" element={<AdminLaptopPerformance />} />
-        <Route path="computers" element={<Computers />} />
-        <Route path="software" element={<Software />} />
-        <Route path="lab-readiness" element={<LabReadiness />} />
-        <Route path="pending-computers" element={<PendingComputers />} />
-        <Route path="computers/:id" element={<ComputerDetails />} />
-        <Route path="alerts" element={<Alerts />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin-laptop" element={<AdminLaptopPerformance />} />
+        <Route path="/computers" element={<Computers />} />
+        <Route path="/software" element={<Software />} />
+        <Route path="/lab-readiness" element={<LabReadiness />} />
+        <Route path="/pending-computers" element={<PendingComputers />} />
+        <Route path="/computers/:id" element={<ComputerDetails />} />
+        <Route path="/alerts" element={<Alerts />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+      {/* 4. Catch-all fallback route */}
+      <Route 
+        path="*" 
+        element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} 
+      />
     </Routes>
   );
 }
