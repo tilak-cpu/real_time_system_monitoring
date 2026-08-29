@@ -98,6 +98,33 @@ public class MetricsSender {
         return "ONLINE";
     }
 
+    public boolean sendHeartbeat(Map<String, Object> heartbeat) {
+        try {
+            String jsonBody = objectMapper.writeValueAsString(heartbeat);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(AgentConfig.getServerUrl() + "/agent/heartbeat"))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofMillis(1500))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                if (wasOffline) {
+                    log.info("[INFO] Agent connection restored via fast heartbeat.");
+                    wasOffline = false;
+                }
+                return true;
+            }
+        } catch (Exception e) {
+            if (!wasOffline) {
+                log.debug("Heartbeat ping dropped: {}", e.getMessage());
+                wasOffline = true;
+            }
+        }
+        return false;
+    }
+
     public void sendMetricsPayload(Map<String, Object> payload) {
         try {
             // First flush any offline cached metric files

@@ -19,6 +19,19 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+const formatLastSeen = (timestamp) => {
+  if (!timestamp) return 'Just now';
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffSec = Math.floor((now - date) / 1000);
+  if (diffSec < 3) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  return `${diffHours}h ago`;
+};
+
 const Computers = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -37,13 +50,46 @@ const Computers = () => {
 
   // Selection & Power Modal State
   const [selectedIds, setSelectedIds] = useState([]);
-  const [powerModal, setPowerModal] = useState({ open: false, action: null, targetCount: 0 });
+  const [powerModal, setPowerModal] = useState({ open: false, action: null, targetCount: 0, targetIds: [] });
   const [actionStatusMsg, setActionStatusMsg] = useState('');
 
   useEffect(() => {
     fetchComputers();
     const interval = setInterval(fetchComputers, 1000);
-    return () => clearInterval(interval);
+
+    // SSE EventSource for real-time targeted status updates (no full page reload)
+    let eventSource;
+    try {
+      eventSource = new EventSource('/api/v1/events/status-stream');
+      eventSource.addEventListener('COMPUTER_STATUS_CHANGED', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload && payload.computerId) {
+            setComputers((prev) =>
+              prev.map((comp) => {
+                if (comp.id === payload.computerId || comp.agentId === payload.agentId) {
+                  return {
+                    ...comp,
+                    status: payload.status,
+                    lastSeenAt: payload.lastSeenAt || new Date().toISOString()
+                  };
+                }
+                return comp;
+              })
+            );
+          }
+        } catch (err) {
+          console.error('Error parsing SSE status payload', err);
+        }
+      });
+    } catch (e) {
+      console.warn('SSE stream unavailable, using 1s fallback', e);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (eventSource) eventSource.close();
+    };
   }, []);
 
   const fetchComputers = async () => {
@@ -125,31 +171,61 @@ const Computers = () => {
     setPowerModal({ open: true, action, targetCount: selectedIds.length, targetIds: selectedIds });
   };
 
-  const handleTriggerBulkAllPowerAction = (action) => {
-    const allIds = computers.map(c => c.id);
-    if (allIds.length === 0) return;
-    setPowerModal({ open: true, action, targetCount: allIds.length, targetIds: allIds });
-  };
-
   const handleTriggerSinglePowerAction = (compId, action) => {
     setPowerModal({ open: true, action, targetCount: 1, targetIds: [compId] });
   };
 
   const handleExecutePowerAction = async () => {
     const idsToProcess = powerModal.targetIds || selectedIds;
-    setActionStatusMsg(`Sending ${powerModal.action} command to ${idsToProcess.length} workstation(s)...`);
-    try {
-      await Promise.all(idsToProcess.map(id => metricsService.sendPowerCommand(id, powerModal.action)));
-      setActionStatusMsg(`✓ ${powerModal.action} command successfully issued!`);
-      setTimeout(() => {
-        setPowerModal({ open: false, action: null, targetCount: 0 });
-        setSelectedIds([]);
-        setActionStatusMsg('');
-        fetchComputers();
-      }, 1200);
-    } catch (e) {
-      console.error('Error executing power action', e);
-      setPowerModal({ open: false, action: null, targetCount: 0 });
+
+    if (powerModal.action === 'SHUTDOWN') {
+      setActionStatusMsg(`Sending shutdown command to ${idsToProcess.length} workstation(s)...`);
+      try {
+        await Promise.all(idsToProcess.map(id => metricsService.sendPowerCommand(id, 'SHUTDOWN')));
+        setActionStatusMsg(`Shutdown command sent. Waiting for computer to go offline...`);
+        
+        let checkCount = 0;
+        const checkOfflineInterval = setInterval(async () => {
+          checkCount++;
+          const data = await metricsService.getAllComputers();
+          const compList = Array.isArray(data) ? data : (data?.data || []);
+          const targetComps = compList.filter(c => idsToProcess.includes(c.id));
+          const allOffline = targetComps.every(c => c.status === 'OFFLINE');
+
+          if (allOffline || checkCount >= 8) {
+            clearInterval(checkOfflineInterval);
+            if (allOffline) {
+              setActionStatusMsg(`✓ Shutdown confirmed by loss of connection.`);
+            } else {
+              setActionStatusMsg(`✓ Shutdown command delivered.`);
+            }
+            setTimeout(() => {
+              setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] });
+              setSelectedIds([]);
+              setActionStatusMsg('');
+              fetchComputers();
+            }, 1200);
+          }
+        }, 1000);
+      } catch (e) {
+        console.error('Error executing shutdown command', e);
+        setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] });
+      }
+    } else {
+      setActionStatusMsg(`Sending ${powerModal.action} command to ${idsToProcess.length} workstation(s)...`);
+      try {
+        await Promise.all(idsToProcess.map(id => metricsService.sendPowerCommand(id, powerModal.action)));
+        setActionStatusMsg(`✓ ${powerModal.action} command successfully issued!`);
+        setTimeout(() => {
+          setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] });
+          setSelectedIds([]);
+          setActionStatusMsg('');
+          fetchComputers();
+        }, 1200);
+      } catch (e) {
+        console.error('Error executing power action', e);
+        setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] });
+      }
     }
   };
 
@@ -160,7 +236,7 @@ const Computers = () => {
         <div>
           <h1 className="font-display text-display text-slate-900 tracking-tight font-extrabold">Computer Lab Workstations</h1>
           <p className="font-body-md text-body-md text-slate-700 mt-1 font-medium">
-            Manage all active computers in your college computer lab with live 1s telemetry and remote power management.
+            Manage all active computers in your computer lab with instant ~1s real-time Online/Offline status detection.
           </p>
         </div>
 
@@ -307,10 +383,15 @@ const Computers = () => {
                         />
                       </td>
                       <td className="p-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${comp.status === 'ONLINE' ? 'bg-emerald-500 status-dot-active' : comp.status === 'WARNING' ? 'bg-amber-500 status-dot-active' : 'bg-red-600'}`}></div>
-                          <span className={`text-mono-sm font-mono-sm font-bold ${comp.status === 'ONLINE' ? 'text-emerald-700' : comp.status === 'WARNING' ? 'text-amber-700' : 'text-red-700'}`}>
-                            {comp.status}
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2.5 h-2.5 rounded-full ${comp.status === 'ONLINE' ? 'bg-emerald-500 status-dot-active' : comp.status === 'WARNING' ? 'bg-amber-500 status-dot-active' : 'bg-red-600'}`}></div>
+                            <span className={`text-mono-sm font-mono-sm font-bold ${comp.status === 'ONLINE' ? 'text-emerald-700' : comp.status === 'WARNING' ? 'text-amber-700' : 'text-red-700'}`}>
+                              {comp.status}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            Last seen: {formatLastSeen(comp.lastSeenAt)}
                           </span>
                         </div>
                       </td>
@@ -380,7 +461,7 @@ const Computers = () => {
                 Confirm {powerModal.action} Command
               </h3>
               <button 
-                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0 })}
+                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] })}
                 className="p-1 rounded text-slate-500 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -392,14 +473,14 @@ const Computers = () => {
             </p>
 
             {actionStatusMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800 animate-pulse">
                 {actionStatusMsg}
               </div>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button 
-                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0 })}
+                onClick={() => setPowerModal({ open: false, action: null, targetCount: 0, targetIds: [] })}
                 className="px-4 py-2 rounded-lg border border-slate-300 text-slate-800 hover:bg-slate-100 text-xs font-bold cursor-pointer"
               >
                 Cancel

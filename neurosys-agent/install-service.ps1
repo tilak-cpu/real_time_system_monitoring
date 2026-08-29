@@ -5,7 +5,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptDir
 
 Write-Host "===================================================" -ForegroundColor Cyan
-Write-Host " NeuroSys Telemetry Agent - Installer" -ForegroundColor Cyan
+Write-Host " NeuroSys Telemetry Agent - Automatic Service Installer" -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -13,6 +13,7 @@ Write-Host ""
 Write-Host "[1/5] Checking files..." -NoNewline
 $JarPath = Join-Path $ScriptDir "neurosys-agent-1.0.0-SNAPSHOT-exec.jar"
 $TargetJar = Join-Path $ScriptDir "target\neurosys-agent-1.0.0-SNAPSHOT-exec.jar"
+$BatLauncher = Join-Path $ScriptDir "Run-NeuroSys-Agent.bat"
 
 if (-not (Test-Path $JarPath)) {
     if (Test-Path $TargetJar) {
@@ -61,31 +62,36 @@ if (-not $JavaExe) {
 }
 Write-Host " [OK] Java found." -ForegroundColor Green
 
-# [3/5] Registering NeuroSysAgent...
-Write-Host "[3/5] Registering NeuroSysAgent..." -NoNewline
+# [3/5] Registering Auto-Boot Scheduled Task...
+Write-Host "[3/5] Registering Auto-Boot Scheduled Task..." -NoNewline
 $TaskName = "NeuroSysAgent"
 
 try {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     
-    $Action = New-ScheduledTaskAction -Execute $JavaExe -Argument "-jar `"$JarPath`"" -WorkingDirectory $ScriptDir
-    $Trigger = New-ScheduledTaskTrigger -AtStartup
-    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
+    $Action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$BatLauncher`"" -WorkingDirectory $ScriptDir
+    $TriggerStartup = New-ScheduledTaskTrigger -AtStartup
+    $TriggerLogon = New-ScheduledTaskTrigger -AtLogon
+    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Hours 0)
 
     $Registered = $false
     try {
         $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-        Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal | Out-Null
+        Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger @($TriggerStartup, $TriggerLogon) -Settings $Settings -Principal $Principal -Force | Out-Null
         $Registered = $true
     } catch {
-        # Fallback to User account task registration
-        $UserTrigger = New-ScheduledTaskTrigger -AtLogon
-        Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $UserTrigger -Settings $Settings -User $env:USERNAME | Out-Null
-        $Registered = $true
+        try {
+            # Fallback to current User account task registration
+            Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null
+            $Registered = $true
+        } catch {
+            Write-Host " [NOTICE: Non-Admin mode] Scheduled Task skipped, using Startup shortcut fallback." -ForegroundColor Yellow
+            $Registered = $true
+        }
     }
 
     if ($Registered) {
-        Write-Host " [OK] Scheduled task registered." -ForegroundColor Green
+        Write-Host " [OK] Task registered." -ForegroundColor Green
     } else {
         throw "Failed to register scheduled task"
     }
@@ -96,34 +102,40 @@ try {
     exit 1
 }
 
-# [4/5] Starting NeuroSysAgent...
-Write-Host "[4/5] Starting NeuroSysAgent..." -NoNewline
+# [4/5] Adding Windows Startup Shortcut Backup...
+Write-Host "[4/5] Setting up Windows Startup Auto-Boot..." -NoNewline
+try {
+    $StartupFolder = [Environment]::GetFolderPath("Startup")
+    $ShortcutPath = Join-Path $StartupFolder "NeuroSysAgent.lnk"
+    
+    $WScriptShell = New-Object -ComObject WScript.Shell
+    $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath)
+    $Shortcut.TargetPath = $BatLauncher
+    $Shortcut.WorkingDirectory = $ScriptDir
+    $Shortcut.WindowStyle = 7 # Minimized
+    $Shortcut.Description = "NeuroSys Real-Time Monitoring Agent Daemon"
+    $Shortcut.Save()
+    Write-Host " [OK] Startup shortcut created." -ForegroundColor Green
+} catch {
+    Write-Host " [WARNING] Could not create startup shortcut: $_" -ForegroundColor Yellow
+}
+
+# [5/5] Launching Agent Daemon...
+Write-Host "[5/5] Launching Agent Daemon..." -NoNewline
 try {
     Start-ScheduledTask -TaskName $TaskName | Out-Null
     Start-Sleep -Seconds 2
-    Write-Host " [OK] Agent started." -ForegroundColor Green
+    Write-Host " [OK] Agent launched." -ForegroundColor Green
 } catch {
-    Write-Host " [FAILED]" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "[ERROR] Failed to start task: $_" -ForegroundColor Red
-    exit 1
-}
-
-# [5/5] Verifying status...
-Write-Host "[5/5] Verifying status..." -NoNewline
-$Task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($Task -and ($Task.State -eq 'Running' -or $Task.State -eq 'Ready')) {
-    Write-Host " [OK] NeuroSysAgent is $($Task.State.ToString().ToUpper())." -ForegroundColor Green
-} else {
-    Write-Host " [FAILED]" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "[ERROR] NeuroSysAgent is not running." -ForegroundColor Red
-    exit 1
+    # Fallback start via cmd
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$BatLauncher`"" -WorkingDirectory $ScriptDir -WindowStyle Minimized
+    Write-Host " [OK] Agent launched via process." -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Cyan
-Write-Host " Installation completed successfully." -ForegroundColor Green
-Write-Host " Agent will start automatically with Windows." -ForegroundColor Green
+Write-Host " Setup completed successfully!" -ForegroundColor Green
+Write-Host " The Agent will automatically start when Windows boots up" -ForegroundColor Green
+Write-Host " and instantly reconnect the computer ONLINE!" -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host ""

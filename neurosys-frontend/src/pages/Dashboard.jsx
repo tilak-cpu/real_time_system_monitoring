@@ -30,7 +30,40 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 1000);
-    return () => clearInterval(interval);
+
+    // SSE EventSource for real-time status change push
+    let eventSource;
+    try {
+      eventSource = new EventSource('/api/v1/events/status-stream');
+      eventSource.addEventListener('COMPUTER_STATUS_CHANGED', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload && payload.computerId) {
+            setComputers((prev) =>
+              prev.map((comp) => {
+                if (comp.id === payload.computerId || comp.agentId === payload.agentId) {
+                  return {
+                    ...comp,
+                    status: payload.status,
+                    lastSeenAt: payload.lastSeenAt || new Date().toISOString()
+                  };
+                }
+                return comp;
+              })
+            );
+          }
+        } catch (err) {
+          console.error('Error parsing SSE status event in Dashboard', err);
+        }
+      });
+    } catch (e) {
+      console.warn('SSE stream unavailable in Dashboard, using 1s fallback', e);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (eventSource) eventSource.close();
+    };
   }, []);
 
   const fetchDashboardData = async () => {

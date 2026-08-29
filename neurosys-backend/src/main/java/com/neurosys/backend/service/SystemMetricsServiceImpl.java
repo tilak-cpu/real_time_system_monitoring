@@ -30,6 +30,7 @@ public class SystemMetricsServiceImpl implements SystemMetricsService {
     private final AlertEngineService alertEngineService;
     private final DiagnosisEngineService diagnosisEngineService;
     private final WebSocketMetricsPublisher webSocketMetricsPublisher;
+    private final HeartbeatTrackerService heartbeatTracker;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
@@ -47,7 +48,7 @@ public class SystemMetricsServiceImpl implements SystemMetricsService {
                     .agentId(request.getAgentId())
                     .hostname("PC-" + request.getAgentId().replaceAll("[^A-Za-z0-9]", ""))
                     .computerName("PC-" + request.getAgentId())
-                    .labName("General Lab")
+                    .labName("Computer Lab")
                     .status(ComputerStatus.ONLINE)
                     .lastSeenAt(Instant.now())
                     .build();
@@ -98,7 +99,9 @@ public class SystemMetricsServiceImpl implements SystemMetricsService {
         ComputerStatus oldStatus = computer.getStatus();
         log.info("[INFO] Heartbeat received from {} (Agent: {})", computer.getHostname(), computer.getAgentId());
 
-        computer.setLastSeenAt(Instant.now());
+        Instant now = Instant.now();
+        heartbeatTracker.updateHeartbeatTime(computer.getId());
+        computer.setLastSeenAt(now);
         if (request.getInternetConnected() != null) {
             computer.setInternetConnected(request.getInternetConnected());
         }
@@ -121,10 +124,11 @@ public class SystemMetricsServiceImpl implements SystemMetricsService {
 
         if (oldStatus != newStatus) {
             log.info("[INFO] PC {} status restored/changed {} → {}", computer.getHostname(), oldStatus, newStatus);
+            webSocketMetricsPublisher.broadcastStatusChange(computer, newStatus, "Telemetry metric ingestion status change");
         }
         computer.setStatus(newStatus);
-        computer.setLastSeenAt(Instant.now());
-        computer.setUpdatedAt(Instant.now());
+        computer.setLastSeenAt(now);
+        computer.setUpdatedAt(now);
         computerRepository.save(computer);
 
         // Calculate Health Score

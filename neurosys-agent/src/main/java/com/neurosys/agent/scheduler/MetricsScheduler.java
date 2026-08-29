@@ -53,15 +53,28 @@ public class MetricsScheduler {
     }
 
     public void start() {
-        log.info("Starting NeuroSys Telemetry Agent (Metrics Interval: {}s, Power Command Polling: 500ms)...", AgentConfig.getIntervalSeconds());
+        log.info("Starting NeuroSys Telemetry Agent (Heartbeat Interval: 1s, Power Command Polling: 500ms)...", AgentConfig.getIntervalSeconds());
 
-        // Perform initial registration
+        // 1. Perform immediate registration & instant initial heartbeat on startup
         attemptRegistration();
+        sendInstantHeartbeat();
 
-        // Schedule periodic metrics sampling
+        // 2. Schedule dedicated 1-second lightweight heartbeat loop
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+            try {
+                if (!isRegistered) {
+                    attemptRegistration();
+                }
+                sendInstantHeartbeat();
+            } catch (Exception e) {
+                log.debug("Heartbeat cycle error: {}", e.getMessage());
+            }
+        }, 0, 1, TimeUnit.SECONDS);
+
+        // 3. Schedule periodic full metrics sampling
         scheduler.scheduleAtFixedRate(this::collectAndSendMetrics, 0, AgentConfig.getIntervalSeconds(), TimeUnit.SECONDS);
 
-        // Schedule dedicated 500ms fast polling loop for remote power commands (LOCK, RESTART, SHUTDOWN)
+        // 4. Schedule dedicated 500ms fast polling loop for remote power commands (LOCK, RESTART, SHUTDOWN)
         powerCommandExecutor.scheduleAtFixedRate(() -> {
             try {
                 if (isRegistered) {
@@ -83,13 +96,24 @@ public class MetricsScheduler {
         regPayload.put("macAddress", networkCollector.getMacAddress());
         regPayload.put("osName", systemInfoCollector.getOsName());
         regPayload.put("osVersion", systemInfoCollector.getOsVersion());
-        regPayload.put("labName", AgentConfig.getLabName());
+        regPayload.put("labName", "Computer Lab");
         regPayload.put("cpuModel", cpuCollector.getCpuName());
         regPayload.put("totalRamMb", memoryCollector.getTotalRamMb());
         regPayload.put("agentVersion", "1.0.0");
         regPayload.put("internetConnected", internetOk);
 
         this.isRegistered = metricsSender.registerWithServer(regPayload);
+    }
+
+    private void sendInstantHeartbeat() {
+        if (!isRegistered) return;
+        Map<String, Object> hb = new HashMap<>();
+        hb.put("agentId", AgentConfig.getAgentId());
+        hb.put("hostname", systemInfoCollector.getHostname());
+        hb.put("status", "ONLINE");
+        hb.put("uptimeSeconds", systemInfoCollector.getUptimeSeconds());
+        hb.put("timestamp", System.currentTimeMillis());
+        metricsSender.sendHeartbeat(hb);
     }
 
     private void collectAndSendMetrics() {

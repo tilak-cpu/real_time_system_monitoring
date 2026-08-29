@@ -66,13 +66,16 @@ public class AgentConfig {
             return propId.trim();
         }
 
-        // Priority 4: Persistent file agent_id.txt in working directory
+        // Priority 4: Deterministic hardware ID derived from Hostname + MAC address hash
+        String generatedId = generateHardwareBasedId();
+
+        // Priority 5: Persistent file agent_id.txt override if set
         Path idFilePath = Path.of("agent_id.txt");
         if (Files.exists(idFilePath)) {
             try {
                 String savedId = Files.readString(idFilePath).trim();
-                if (!savedId.isEmpty()) {
-                    log.info("Loaded persistent Agent ID from agent_id.txt: {}", savedId);
+                if (!savedId.isEmpty() && savedId.startsWith("AGENT-")) {
+                    log.info("Using configured Agent ID from agent_id.txt: {}", savedId);
                     return savedId;
                 }
             } catch (Exception e) {
@@ -80,13 +83,10 @@ public class AgentConfig {
             }
         }
 
-        // Priority 5: Deterministic ID derived from Hostname + MAC address hash
-        String generatedId = generateHardwareBasedId();
-
-        // Save generated ID to agent_id.txt for future boots
+        // Save generated hardware ID to agent_id.txt for transparency
         try {
             Files.writeString(idFilePath, generatedId);
-            log.info("Persisted new Agent ID to agent_id.txt: {}", generatedId);
+            log.info("Persisted unique hardware Agent ID to agent_id.txt: {}", generatedId);
         } catch (Exception e) {
             log.warn("Could not save agent_id.txt: {}", e.getMessage());
         }
@@ -126,7 +126,7 @@ public class AgentConfig {
             url = System.getProperty("server.url");
         }
         if (url == null || url.trim().isEmpty()) {
-            url = properties.getProperty("server.url", "https://zestful-energy-production-5cb8.up.railway.app/api/v1");
+            url = properties.getProperty("server.url", "https://realtimesystemmonitoring-production.up.railway.app/api/v1");
         }
         url = url.trim();
         while (url.endsWith("/")) {
