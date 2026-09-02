@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -77,20 +78,253 @@ public class AgentDownloadController {
                     "agent.collection.interval.seconds=1\n",
                     lab.getName(), lab.getCode(), activeCode, lab.getName()
             );
-            ZipEntry propsEntry = new ZipEntry("agent.properties");
-            zos.putNextEntry(propsEntry);
-            zos.write(propsContent.getBytes());
-            zos.closeEntry();
+            writeZipEntry(zos, "agent.properties", propsContent.getBytes());
 
-            // 2. Include helper batch files from neurosys-agent directory if available
-            addFileToZip(zos, "setup-agent.bat", Paths.get("..", "neurosys-agent", "setup-agent.bat"), Paths.get("neurosys-agent", "setup-agent.bat"));
-            addFileToZip(zos, "start-agent.bat", Paths.get("..", "neurosys-agent", "start-agent.bat"), Paths.get("neurosys-agent", "start-agent.bat"));
-            addFileToZip(zos, "stop-agent.bat", Paths.get("..", "neurosys-agent", "stop-agent.bat"), Paths.get("neurosys-agent", "stop-agent.bat"));
-            addFileToZip(zos, "uninstall-agent.bat", Paths.get("..", "neurosys-agent", "uninstall-agent.bat"), Paths.get("neurosys-agent", "uninstall-agent.bat"));
-            addFileToZip(zos, "Run-NeuroSys-Agent.bat", Paths.get("..", "neurosys-agent", "Run-NeuroSys-Agent.bat"), Paths.get("neurosys-agent", "Run-NeuroSys-Agent.bat"));
-            addFileToZip(zos, "install-service.ps1", Paths.get("..", "neurosys-agent", "install-service.ps1"), Paths.get("neurosys-agent", "install-service.ps1"));
+            // 2. Write start-agent.bat
+            String startBatContent =
+                    "@echo off\r\n" +
+                    "setlocal EnableDelayedExpansion\r\n" +
+                    "title NeuroSys Agent - Start\r\n" +
+                    "net session >nul 2>&1\r\n" +
+                    "if %errorlevel% neq 0 (\r\n" +
+                    "    powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process '%~f0' -Verb RunAs\" >nul 2>&1\r\n" +
+                    "    if %errorlevel% equ 0 exit /b\r\n" +
+                    ")\r\n" +
+                    "cd /d \"%~dp0\"\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo  NeuroSys Agent Control - Start\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo.\r\n" +
+                    "set \"ACTIVE_JAR=\"\r\n" +
+                    "if exist \"%~dp0neurosys-agent-1.0.0-SNAPSHOT-exec.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0-SNAPSHOT-exec.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0neurosys-agent-1.0.0.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0neurosys-agent-1.0.0-SNAPSHOT.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0-SNAPSHOT.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0target\\neurosys-agent-1.0.0-SNAPSHOT-exec.jar\" set \"ACTIVE_JAR=%~dp0target\\neurosys-agent-1.0.0-SNAPSHOT-exec.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR (\r\n" +
+                    "    echo [ERROR] NeuroSys Agent installation files are missing!\r\n" +
+                    "    echo Please run setup-agent.bat first to install the Agent.\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 4 127.0.0.1 >nul\r\n" +
+                    "    exit /b 1\r\n" +
+                    ")\r\n" +
+                    "for /f \"tokens=*\" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId\"') do (\r\n" +
+                    "    if not \"%%P\"==\"\" (\r\n" +
+                    "        echo NeuroSys Agent\r\n" +
+                    "        echo Status: RUNNING\r\n" +
+                    "        echo.\r\n" +
+                    "        ping -n 3 127.0.0.1 >nul\r\n" +
+                    "        exit /b 0\r\n" +
+                    "    )\r\n" +
+                    ")\r\n" +
+                    "echo Starting NeuroSys Agent...\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue) { Start-ScheduledTask -TaskName 'NeuroSysAgent' } else { Start-Process 'javaw.exe' -ArgumentList '-jar', '`\"%ACTIVE_JAR%`\"' -WorkingDirectory '%~dp0' }\" >nul 2>&1\r\n" +
+                    "ping -n 5 127.0.0.1 >nul\r\n" +
+                    "set \"IS_RUNNING=0\"\r\n" +
+                    "for /f \"tokens=*\" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId\"') do (\r\n" +
+                    "    if not \"%%P\"==\"\" set \"IS_RUNNING=1\"\r\n" +
+                    ")\r\n" +
+                    "if \"%IS_RUNNING%\"==\"1\" (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo NeuroSys Agent\r\n" +
+                    "    echo Status: RUNNING\r\n" +
+                    "    echo.\r\n" +
+                    ") else (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo [FAILED] Could not verify Agent process startup.\r\n" +
+                    "    echo Please run setup-agent.bat first.\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 4 127.0.0.1 >nul\r\n" +
+                    "    exit /b 1\r\n" +
+                    ")\r\n" +
+                    "ping -n 3 127.0.0.1 >nul\r\n";
+            writeZipEntry(zos, "start-agent.bat", startBatContent.getBytes());
 
-            // 3. Write README-INSTALLATION.txt
+            // 3. Write stop-agent.bat
+            String stopBatContent =
+                    "@echo off\r\n" +
+                    "setlocal EnableDelayedExpansion\r\n" +
+                    "title NeuroSys Agent - Stop\r\n" +
+                    "net session >nul 2>&1\r\n" +
+                    "if %errorlevel% neq 0 (\r\n" +
+                    "    powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process '%~f0' -Verb RunAs\" >nul 2>&1\r\n" +
+                    "    if %errorlevel% equ 0 exit /b\r\n" +
+                    ")\r\n" +
+                    "cd /d \"%~dp0\"\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo  NeuroSys Agent Control - Stop\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo.\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue }\" >nul 2>&1\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$procs = Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' }; foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }\" >nul 2>&1\r\n" +
+                    "ping -n 3 127.0.0.1 >nul\r\n" +
+                    "set \"STILL_RUNNING=0\"\r\n" +
+                    "for /f \"tokens=*\" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId\"') do (\r\n" +
+                    "    if not \"%%P\"==\"\" set \"STILL_RUNNING=1\"\r\n" +
+                    ")\r\n" +
+                    "if \"%STILL_RUNNING%\"==\"0\" (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo NeuroSys Agent\r\n" +
+                    "    echo Status: STOPPED\r\n" +
+                    "    echo.\r\n" +
+                    ") else (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo [FAILED] Agent process could not be terminated.\r\n" +
+                    "    echo Status: RUNNING\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 4 127.0.0.1 >nul\r\n" +
+                    "    exit /b 1\r\n" +
+                    ")\r\n" +
+                    "ping -n 3 127.0.0.1 >nul\r\n";
+            writeZipEntry(zos, "stop-agent.bat", stopBatContent.getBytes());
+
+            // 4. Write uninstall-agent.bat
+            String uninstallBatContent =
+                    "@echo off\r\n" +
+                    "setlocal EnableDelayedExpansion\r\n" +
+                    "title NeuroSys Agent Uninstaller\r\n" +
+                    "net session >nul 2>&1\r\n" +
+                    "if %errorlevel% neq 0 (\r\n" +
+                    "    powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process '%~f0' -Verb RunAs\" >nul 2>&1\r\n" +
+                    "    if %errorlevel% equ 0 exit /b\r\n" +
+                    ")\r\n" +
+                    "set \"AGENT_DIR=%~dp0\"\r\n" +
+                    "if \"%AGENT_DIR:~-1%\"==\"\\\" set \"AGENT_DIR=%AGENT_DIR:~0,-1%\"\r\n" +
+                    "echo.\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo  NeuroSys Agent Uninstaller\r\n" +
+                    "echo ===================================================\r\n" +
+                    "echo.\r\n" +
+                    "set \"AGENT_STOPPED=FAILED\"\r\n" +
+                    "set \"TASK_REMOVED=FAILED\"\r\n" +
+                    "set \"PROCESS_TERMINATED=FAILED\"\r\n" +
+                    "set \"RUNTIME_REMOVED=FAILED\"\r\n" +
+                    "set \"INSTALLATION_REMOVED=FAILED\"\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'NeuroSysAgent' -Confirm:\\$false -ErrorAction SilentlyContinue }\" >nul 2>&1\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (-not (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }\" >nul 2>&1\r\n" +
+                    "if %errorlevel% equ 0 (\r\n" +
+                    "    set \"TASK_REMOVED=OK\"\r\n" +
+                    "    set \"AGENT_STOPPED=OK\"\r\n" +
+                    ") else (\r\n" +
+                    "    set \"TASK_REMOVED=FAILED\"\r\n" +
+                    ")\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$u = [Environment]::GetFolderPath('Startup'); $uL = Join-Path $u 'NeuroSysAgent.lnk'; if (Test-Path $uL) { Remove-Item $uL -Force -ErrorAction SilentlyContinue }; $c = [Environment]::GetFolderPath('CommonStartup'); $cL = Join-Path $c 'NeuroSysAgent.lnk'; if (Test-Path $cL) { Remove-Item $cL -Force -ErrorAction SilentlyContinue }\" >nul 2>&1\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$procs = Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' }; foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }\" >nul 2>&1\r\n" +
+                    "ping -n 3 127.0.0.1 >nul\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p = Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' }; if (-not $p) { exit 0 } else { exit 1 }\" >nul 2>&1\r\n" +
+                    "if %errorlevel% equ 0 (\r\n" +
+                    "    set \"PROCESS_TERMINATED=OK\"\r\n" +
+                    ") else (\r\n" +
+                    "    set \"PROCESS_TERMINATED=FAILED\"\r\n" +
+                    ")\r\n" +
+                    "if exist \"%AGENT_DIR%\\cache\" rmdir /s /q \"%AGENT_DIR%\\cache\" >nul 2>&1\r\n" +
+                    "if exist \"%AGENT_DIR%\\logs\" rmdir /s /q \"%AGENT_DIR%\\logs\" >nul 2>&1\r\n" +
+                    "set \"RUNTIME_REMOVED=OK\"\r\n" +
+                    "set \"INSTALLATION_REMOVED=OK\"\r\n" +
+                    "echo [%AGENT_STOPPED%] Agent stopped\r\n" +
+                    "echo [%TASK_REMOVED%] Scheduled task removed\r\n" +
+                    "echo [%PROCESS_TERMINATED%] Agent process terminated\r\n" +
+                    "echo [%RUNTIME_REMOVED%] Runtime files removed\r\n" +
+                    "echo [%INSTALLATION_REMOVED%] Installation removed\r\n" +
+                    "echo.\r\n" +
+                    "if \"%PROCESS_TERMINATED%\"==\"OK\" if \"%TASK_REMOVED%\"==\"OK\" (\r\n" +
+                    "    echo NeuroSys Agent has been successfully uninstalled.\r\n" +
+                    "    echo.\r\n" +
+                    "    echo You can now delete the ZIP package.\r\n" +
+                    "    echo.\r\n" +
+                    "    powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 4; Remove-Item `\"%AGENT_DIR%`\" -Recurse -Force' -WindowStyle Hidden\" >nul 2>&1\r\n" +
+                    "    ping -n 3 127.0.0.1 >nul\r\n" +
+                    "    exit /b 0\r\n" +
+                    ") else (\r\n" +
+                    "    echo [FAILED] NeuroSys Agent was NOT completely removed.\r\n" +
+                    "    echo Please try again as Administrator.\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 4 127.0.0.1 >nul\r\n" +
+                    "    exit /b 1\r\n" +
+                    ")\r\n";
+            writeZipEntry(zos, "uninstall-agent.bat", uninstallBatContent.getBytes());
+
+            // 5. Write setup-agent.bat
+            String setupBatContent =
+                    "@echo off\r\n" +
+                    "setlocal\r\n" +
+                    "cd /d \"%~dp0\"\r\n" +
+                    "net session >nul 2>&1\r\n" +
+                    "if %errorlevel% neq 0 (\r\n" +
+                    "    echo Requesting Administrative privileges to install NeuroSys Agent...\r\n" +
+                    "    powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process '%~f0' -Verb RunAs\" >nul 2>&1\r\n" +
+                    "    if %errorlevel% equ 0 exit /b\r\n" +
+                    ")\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0install-service.ps1\"\r\n" +
+                    "if %errorlevel% neq 0 (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo [FATAL ERROR] Agent setup failed with error code %errorlevel%.\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 5 127.0.0.1 >nul\r\n" +
+                    "    exit /b %errorlevel%\r\n" +
+                    ")\r\n" +
+                    "ping -n 3 127.0.0.1 >nul\r\n";
+            writeZipEntry(zos, "setup-agent.bat", setupBatContent.getBytes());
+
+            // 6. Write Run-NeuroSys-Agent.bat
+            String runBatContent =
+                    "@echo off\r\n" +
+                    "title NeuroSys Cloud Monitoring Agent Daemon\r\n" +
+                    "cd /d \"%~dp0\"\r\n" +
+                    "echo =========================================================\r\n" +
+                    "echo   NeuroSys Cloud Monitoring Agent Daemon\r\n" +
+                    "echo =========================================================\r\n" +
+                    "set \"JAVA_EXE=java\"\r\n" +
+                    "if exist \"%~dp0jre\\bin\\java.exe\" (\r\n" +
+                    "    set \"JAVA_EXE=%~dp0jre\\bin\\java.exe\"\r\n" +
+                    ")\r\n" +
+                    ":agent_loop\r\n" +
+                    "set \"ACTIVE_JAR=\"\r\n" +
+                    "if exist \"%~dp0neurosys-agent-1.0.0-SNAPSHOT-exec.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0-SNAPSHOT-exec.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0neurosys-agent-1.0.0.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0neurosys-agent-1.0.0-SNAPSHOT.jar\" set \"ACTIVE_JAR=%~dp0neurosys-agent-1.0.0-SNAPSHOT.jar\"\r\n" +
+                    "if not defined ACTIVE_JAR if exist \"%~dp0target\\neurosys-agent-1.0.0-SNAPSHOT-exec.jar\" set \"ACTIVE_JAR=%~dp0target\\neurosys-agent-1.0.0-SNAPSHOT-exec.jar\"\r\n" +
+                    "if defined ACTIVE_JAR (\r\n" +
+                    "    echo [INFO] Starting NeuroSys Monitoring Agent Daemon using %ACTIVE_JAR%...\r\n" +
+                    "    \"%JAVA_EXE%\" -jar \"%ACTIVE_JAR%\"\r\n" +
+                    ") else (\r\n" +
+                    "    echo.\r\n" +
+                    "    echo [ERROR] Could not find executable Agent JAR file!\r\n" +
+                    "    echo Please make sure the Agent package has been extracted properly.\r\n" +
+                    "    echo.\r\n" +
+                    "    ping -n 10 127.0.0.1 >nul\r\n" +
+                    "    goto agent_loop\r\n" +
+                    ")\r\n" +
+                    "echo.\r\n" +
+                    "echo [WARN] Agent connection interrupted or system restarted. Auto-reconnecting in 5 seconds...\r\n" +
+                    "ping -n 6 127.0.0.1 >nul\r\n" +
+                    "goto agent_loop\r\n";
+            writeZipEntry(zos, "Run-NeuroSys-Agent.bat", runBatContent.getBytes());
+
+            // 7. Write install-service.ps1
+            String ps1Content =
+                    "$ErrorActionPreference = 'Stop'\r\n" +
+                    "$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\r\n" +
+                    "Set-Location $ScriptDir\r\n" +
+                    "Write-Host '===================================================' -ForegroundColor Cyan\r\n" +
+                    "Write-Host ' NeuroSys Telemetry Agent - Automatic Service Installer' -ForegroundColor Cyan\r\n" +
+                    "Write-Host '===================================================' -ForegroundColor Cyan\r\n" +
+                    "$TaskName = 'NeuroSysAgent'\r\n" +
+                    "$BatLauncher = Join-Path $ScriptDir 'Run-NeuroSys-Agent.bat'\r\n" +
+                    "try {\r\n" +
+                    "    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null\r\n" +
+                    "    $Action = New-ScheduledTaskAction -Execute 'cmd.exe' -ArgumentList \"/c `\"$BatLauncher`\"\" -WorkingDirectory $ScriptDir\r\n" +
+                    "    $TriggerLogon = New-ScheduledTaskTrigger -AtLogon\r\n" +
+                    "    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable\r\n" +
+                    "    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null\r\n" +
+                    "    Write-Host ' [OK] Task registered successfully.' -ForegroundColor Green\r\n" +
+                    "    Start-ScheduledTask -TaskName $TaskName | Out-Null\r\n" +
+                    "} catch {\r\n" +
+                    "    Write-Host ' [NOTICE] Running background agent fallback.' -ForegroundColor Yellow\r\n" +
+                    "    Start-Process 'cmd.exe' -ArgumentList \"/c `\"$BatLauncher`\"\" -WorkingDirectory $ScriptDir -WindowStyle Minimized\r\n" +
+                    "}\r\n";
+            writeZipEntry(zos, "install-service.ps1", ps1Content.getBytes());
+
+            // 8. Write README-INSTALLATION.txt
             String readmeContent = String.format(
                     "=========================================================\n" +
                     "NEUROSYS AGENT ONBOARDING PACKAGE\n" +
@@ -100,18 +334,15 @@ public class AgentDownloadController {
                     "=========================================================\n\n" +
                     "INSTRUCTIONS FOR SYSTEM ADMINISTRATORS:\n\n" +
                     "1. Extract all files in this ZIP archive to a folder on the target Windows workstation.\n" +
-                    "2. Run 'setup-agent.bat' once to register the background agent service.\n" +
-                    "3. Use 'start-agent.bat' or 'stop-agent.bat' to start or stop the agent.\n" +
-                    "4. To completely remove the agent, run 'uninstall-agent.bat'.\n\n" +
+                    "2. Run 'start-agent.bat' to start the agent immediately.\n" +
+                    "3. Run 'stop-agent.bat' to stop the agent.\n" +
+                    "4. Run 'uninstall-agent.bat' for a complete clean uninstallation.\n\n" +
                     "Need assistance? Contact your NeuroSys Lab Supervisor.\n",
                     lab.getName(), lab.getCode(), activeCode, Instant.now().toString()
             );
-            ZipEntry readmeEntry = new ZipEntry("README-INSTALLATION.txt");
-            zos.putNextEntry(readmeEntry);
-            zos.write(readmeContent.getBytes());
-            zos.closeEntry();
+            writeZipEntry(zos, "README-INSTALLATION.txt", readmeContent.getBytes());
 
-            // 4. Attach compiled neurosys-agent JAR under both exact and alias names for backwards compatibility
+            // 9. Attach compiled neurosys-agent JAR
             Path agentJarPath = Paths.get("..", "neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
             if (!Files.exists(agentJarPath)) {
                 agentJarPath = Paths.get("neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
@@ -121,16 +352,8 @@ public class AgentDownloadController {
             }
             if (Files.exists(agentJarPath)) {
                 byte[] jarBytes = Files.readAllBytes(agentJarPath);
-
-                ZipEntry jarEntry1 = new ZipEntry("neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
-                zos.putNextEntry(jarEntry1);
-                zos.write(jarBytes);
-                zos.closeEntry();
-
-                ZipEntry jarEntry2 = new ZipEntry("neurosys-agent-1.0.0.jar");
-                zos.putNextEntry(jarEntry2);
-                zos.write(jarBytes);
-                zos.closeEntry();
+                writeZipEntry(zos, "neurosys-agent-1.0.0-SNAPSHOT-exec.jar", jarBytes);
+                writeZipEntry(zos, "neurosys-agent-1.0.0.jar", jarBytes);
             }
 
             zos.finish();
@@ -152,18 +375,10 @@ public class AgentDownloadController {
         }
     }
 
-    private void addFileToZip(ZipOutputStream zos, String entryName, Path path1, Path path2) {
-        try {
-            Path targetPath = Files.exists(path1) ? path1 : (Files.exists(path2) ? path2 : null);
-            if (targetPath != null) {
-                byte[] content = Files.readAllBytes(targetPath);
-                ZipEntry entry = new ZipEntry(entryName);
-                zos.putNextEntry(entry);
-                zos.write(content);
-                zos.closeEntry();
-            }
-        } catch (Exception e) {
-            log.warn("Could not bundle file {} in zip: {}", entryName, e.getMessage());
-        }
+    private void writeZipEntry(ZipOutputStream zos, String entryName, byte[] data) throws Exception {
+        ZipEntry entry = new ZipEntry(entryName);
+        zos.putNextEntry(entry);
+        zos.write(data);
+        zos.closeEntry();
     }
 }
