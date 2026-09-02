@@ -21,7 +21,7 @@ public class DatabaseConfig {
     @Bean
     @Primary
     public DataSource dataSource() {
-        log.info("[DATABASE CONFIG] Active Profile: {}", activeProfile);
+        log.info("[DATABASE CONFIG] Active Spring Profile: {}", activeProfile);
 
         String rawUrl = System.getenv("SPRING_DATASOURCE_URL");
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
@@ -63,7 +63,7 @@ public class DatabaseConfig {
 
         // 1. Direct JDBC URL
         if (rawUrl != null && rawUrl.startsWith("jdbc:mysql://")) {
-            log.info("[DATABASE CONFIG] Configuring Hikari DataSource with direct JDBC URL scheme to host/db");
+            log.info("[DATABASE CONFIG] Configuring Hikari DataSource with direct JDBC URL scheme");
             config.setJdbcUrl(rawUrl);
             if (user != null) config.setUsername(user);
             if (pass != null) config.setPassword(pass);
@@ -107,25 +107,35 @@ public class DatabaseConfig {
             log.info("[DATABASE CONFIG] Configured Hikari DataSource with Host Params (Host: {}, DB: {})", host, db != null ? db : "railway");
             config.setJdbcUrl(jdbcUrl);
             config.setUsername(user != null ? user : "root");
-            config.setPassword(pass != null ? pass : "Karthik@2005");
+            config.setPassword(pass != null ? pass : "");
             config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             configured = true;
         }
 
-        // 4. Handle Unconfigured State
+        // 4. Default Environment Handling
         if (!configured) {
             if ("prod".equalsIgnoreCase(activeProfile)) {
-                log.error("[CRITICAL ERROR] Production profile active, but NO Railway MySQL environment variables found! Failing startup safely.");
-                throw new IllegalStateException("CRITICAL CONFIGURATION ERROR: Production profile active but no Railway MySQL environment variables found! (Missing MYSQLHOST / MYSQL_PUBLIC_URL / SPRING_DATASOURCE_URL)");
-            }
+                String railwayHost = "mysql.railway.internal";
+                String railwayPort = port != null ? port : "3306";
+                String railwayDb = db != null ? db : "railway";
+                String railwayUser = user != null ? user : "root";
+                String railwayPass = pass != null ? pass : "";
 
-            // Local Development Profile Fallback
-            String localUrl = "jdbc:mysql://localhost:3306/railway?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-            log.info("[DATABASE CONFIG] Dev Profile: Configuring local MySQL DataSource (jdbc:mysql://localhost:3306/railway)");
-            config.setJdbcUrl(localUrl);
-            config.setUsername(user != null ? user : "root");
-            config.setPassword(pass != null ? pass : "Karthik@2005");
-            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+                String jdbcUrl = String.format("jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+                        railwayHost, railwayPort, railwayDb);
+                log.info("[DATABASE CONFIG] Prod Profile: Target Railway MySQL Internal Networking (Host: {}, DB: {})", railwayHost, railwayDb);
+                config.setJdbcUrl(jdbcUrl);
+                config.setUsername(railwayUser);
+                config.setPassword(railwayPass);
+                config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+            } else {
+                String localUrl = "jdbc:mysql://localhost:3306/railway?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                log.info("[DATABASE CONFIG] Dev Profile: Configuring local MySQL DataSource (jdbc:mysql://localhost:3306/railway)");
+                config.setJdbcUrl(localUrl);
+                config.setUsername(user != null ? user : "root");
+                config.setPassword(pass != null ? pass : "Karthik@2005");
+                config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+            }
         }
 
         config.setInitializationFailTimeout(-1);
