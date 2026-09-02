@@ -142,6 +142,38 @@ public class RemotePowerServiceImpl implements RemotePowerService {
                 .toList();
     }
 
+    @Override
+    @Transactional
+    public List<RemotePowerCommandDto> issueBulkCommands(String labId, List<String> computerIds, PowerCommandType type, String requestedBy) {
+        log.info("[INFO] Bulk power action requested: Action={}, LabID={}, TargetCount={}", type, labId, computerIds != null ? computerIds.size() : 0);
+
+        List<Computer> targetComputers;
+        if (computerIds != null && !computerIds.isEmpty()) {
+            targetComputers = computerRepository.findAllById(computerIds);
+            if (labId != null && !labId.isEmpty() && !"ALL".equalsIgnoreCase(labId)) {
+                targetComputers = targetComputers.stream()
+                        .filter(c -> c.getLab() != null && labId.equals(c.getLab().getId()))
+                        .toList();
+            }
+        } else if (labId != null && !labId.isEmpty() && !"ALL".equalsIgnoreCase(labId)) {
+            targetComputers = computerRepository.findByLabIdAndStatus(labId, ComputerStatus.ONLINE);
+        } else {
+            targetComputers = computerRepository.findByStatus(ComputerStatus.ONLINE);
+        }
+
+        return targetComputers.stream()
+                .map(comp -> {
+                    try {
+                        return issueCommand(comp.getId(), type, requestedBy);
+                    } catch (Exception e) {
+                        log.warn("Failed to issue bulk command {} for computer {}: {}", type, comp.getHostname(), e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(cmd -> cmd != null)
+                .toList();
+    }
+
     private RemotePowerCommandDto mapToCommandDto(RemotePowerCommand entity) {
         String compId = "";
         String compName = "Computer";

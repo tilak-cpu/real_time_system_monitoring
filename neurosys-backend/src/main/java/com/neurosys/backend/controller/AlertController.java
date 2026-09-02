@@ -20,9 +20,11 @@ public class AlertController {
     private final AlertEngineService alertEngineService;
 
     @GetMapping
-    @Operation(summary = "Get All Fleet Alerts", description = "Retrieve all triggered alerts across all monitored computers in MySQL database")
-    public ResponseEntity<ApiResponse<List<AlertDto>>> getAllAlerts() {
-        List<AlertDto> alerts = alertEngineService.getAllAlerts();
+    @Operation(summary = "Get Fleet Alerts", description = "Retrieve triggered alerts, optionally filtered by labId")
+    public ResponseEntity<ApiResponse<List<AlertDto>>> getAllAlerts(@RequestParam(required = false) String labId) {
+        List<AlertDto> alerts = (labId != null && !labId.isEmpty() && !"ALL".equalsIgnoreCase(labId))
+                ? alertEngineService.getAlertsByLabId(labId)
+                : alertEngineService.getAllAlerts();
         return ResponseEntity.ok(ApiResponse.success("Alerts fetched successfully", alerts));
     }
 

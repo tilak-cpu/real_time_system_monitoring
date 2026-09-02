@@ -17,7 +17,12 @@ public interface ComputerRepository extends JpaRepository<Computer, String> {
     Optional<Computer> findByHostnameIgnoreCase(String hostname);
     List<Computer> findByStatus(ComputerStatus status);
     List<Computer> findByLabName(String labName);
+    List<Computer> findByLabId(String labId);
+    List<Computer> findByLabIdAndStatus(String labId, ComputerStatus status);
+    List<Computer> findByLabIsNull();
     long countByStatus(ComputerStatus status);
+    long countByLabId(String labId);
+    long countByLabIdAndStatus(String labId, ComputerStatus status);
 
     @Query("SELECT c FROM Computer c WHERE c.status = 'ONLINE' AND c.lastSeenAt < :threshold")
     List<Computer> findStaleOnlineComputers(Instant threshold);

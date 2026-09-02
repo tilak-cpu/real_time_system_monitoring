@@ -20,9 +20,11 @@ public class ComputerController {
     private final ComputerService computerService;
 
     @GetMapping
-    @Operation(summary = "Get All Approved Computers", description = "Retrieve list of all active approved computers across all labs")
-    public ResponseEntity<ApiResponse<List<ComputerDto>>> getAllComputers() {
-        List<ComputerDto> computers = computerService.getAllComputers();
+    @Operation(summary = "Get All Approved Computers", description = "Retrieve list of all active approved computers, optionally filtered by labId")
+    public ResponseEntity<ApiResponse<List<ComputerDto>>> getAllComputers(@RequestParam(required = false) String labId) {
+        List<ComputerDto> computers = (labId != null && !labId.isEmpty() && !"ALL".equalsIgnoreCase(labId))
+                ? computerService.getComputersByLabId(labId)
+                : computerService.getAllComputers();
         return ResponseEntity.ok(ApiResponse.success("Computers fetched successfully", computers));
     }
 

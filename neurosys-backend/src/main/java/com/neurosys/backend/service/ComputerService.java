@@ -10,6 +10,7 @@ public interface ComputerService {
     ComputerDto getComputerById(String id);
     ComputerDto getComputerByAgentId(String agentId);
     List<ComputerDto> getComputersByLab(String labName);
+    List<ComputerDto> getComputersByLabId(String labId);
     ComputerDto approveComputer(String computerId);
     ComputerDto rejectComputer(String computerId);
     String getAgentStatus(String agentId);

@@ -31,6 +31,7 @@ public class AgentRegistrationRequest {
 
     private String osVersion;
     private String labName;
+    private String enrollmentCode;
     private String cpuModel;
     private Double totalRamMb;
     private String agentVersion;

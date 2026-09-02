@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { metricsService, fetchRealApi } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import { 
   PackageCheck, 
   Search, 
@@ -19,6 +20,7 @@ import {
 
 const Software = () => {
   const navigate = useNavigate();
+  const { currentLab } = useLab();
   const [computers, setComputers] = useState([]);
   const [softwareList, setSoftwareList] = useState([]);
   const [selectedComputerId, setSelectedComputerId] = useState('ALL');
@@ -39,7 +41,7 @@ const Software = () => {
     loadData();
     const interval = setInterval(loadData, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentLab?.id]);
 
   const loadData = async () => {
     try {
@@ -47,8 +49,8 @@ const Software = () => {
 
       const fetchApi = fetchRealApi || metricsService.fetchRealApi;
 
-      // Fetch computers using the exact same API service as Dashboard
-      const compRes = await metricsService.getAllComputers().catch(err => {
+      // Fetch computers using lab-scoped API
+      const compRes = await metricsService.getAllComputers(currentLab?.id).catch(err => {
         console.warn('[SOFTWARE] Computer API warning:', err);
         return [];
       });

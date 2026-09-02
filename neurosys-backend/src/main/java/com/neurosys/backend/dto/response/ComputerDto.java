@@ -20,7 +20,10 @@ public class ComputerDto {
     private String macAddress;
     private String osName;
     private String osVersion;
+    private String labId;
+    private String labCode;
     private String labName;
+    private String displayName;
     private String cpuModel;
     private Double totalRamMb;
     private String agentVersion;

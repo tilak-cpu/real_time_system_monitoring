@@ -61,6 +61,17 @@ public class ComputerServiceImpl implements ComputerService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ComputerDto> getComputersByLabId(String labId) {
+        if (labId == null || labId.isEmpty() || "ALL".equalsIgnoreCase(labId)) {
+            return getAllComputers();
+        }
+        return computerRepository.findByLabId(labId).stream()
+                .filter(c -> c.getStatus() != ComputerStatus.PENDING && c.getStatus() != ComputerStatus.REJECTED)
+                .map(this::mapToDto).toList();
+    }
+
+    @Override
     @Transactional
     public ComputerDto approveComputer(String computerId) {
         Computer computer = computerRepository.findById(computerId)
@@ -111,7 +122,10 @@ public class ComputerServiceImpl implements ComputerService {
                 .macAddress(computer.getMacAddress())
                 .osName(computer.getOsName())
                 .osVersion(computer.getOsVersion())
-                .labName(computer.getLabName())
+                .labId(computer.getLab() != null ? computer.getLab().getId() : null)
+                .labCode(computer.getLab() != null ? computer.getLab().getCode() : null)
+                .labName(computer.getLab() != null ? computer.getLab().getName() : (computer.getLabName() != null ? computer.getLabName() : "Computer Lab 1"))
+                .displayName(computer.getDisplayName() != null ? computer.getDisplayName() : computer.getComputerName())
                 .cpuModel(computer.getCpuModel())
                 .totalRamMb(computer.getTotalRamMb())
                 .agentVersion(computer.getAgentVersion())

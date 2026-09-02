@@ -16,6 +16,10 @@ public class AlertDto {
     private String id;
     private String computerId;
     private String hostname;
+    private String computerName;
+    private String labId;
+    private String labCode;
+    private String labName;
     private String title;
     private String message;
     private String recommendedAction;

@@ -11,6 +11,8 @@ public interface RemotePowerService {
 
     RemotePowerCommandDto issueCommand(String computerId, PowerCommandType type, String requestedBy);
 
+    List<RemotePowerCommandDto> issueBulkCommands(String labId, List<String> computerIds, PowerCommandType type, String requestedBy);
+
     RemotePowerCommandDto getPendingCommandForAgent(String agentId);
 
     RemotePowerCommandDto updateCommandStatus(CommandStatusUpdateRequest request);

@@ -1,10 +1,12 @@
 package com.neurosys.backend.config;
 
 import com.neurosys.backend.entity.Computer;
+import com.neurosys.backend.entity.Lab;
 import com.neurosys.backend.entity.User;
 import com.neurosys.backend.enums.ComputerStatus;
 import com.neurosys.backend.enums.Role;
 import com.neurosys.backend.repository.ComputerRepository;
+import com.neurosys.backend.repository.LabRepository;
 import com.neurosys.backend.repository.SoftwareInventoryRepository;
 import com.neurosys.backend.repository.UserRepository;
 
@@ -24,6 +26,7 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final ComputerRepository computerRepository;
     private final SoftwareInventoryRepository softwareInventoryRepository;
+    private final LabRepository labRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -42,7 +45,44 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default Administrator user created successfully.");
         }
 
-        // 2. Clean up old mock sample computers (LAB-ALPHA-01, LAB-ALPHA-02, LAB-BETA-01, LAB-BETA-02)
+        // 2. Seed Default Computer Labs if none exist
+        Lab lab1 = labRepository.findByCodeIgnoreCase("LAB-001").orElseGet(() -> {
+            log.info("Seeding default Computer Lab 1 (LAB-001)...");
+            return labRepository.save(Lab.builder()
+                    .name("Computer Lab 1")
+                    .code("LAB-001")
+                    .location("Building A, Room 101")
+                    .description("General Programming & Software Engineering Laboratory")
+                    .status("ACTIVE")
+                    .createdAt(Instant.now())
+                    .build());
+        });
+
+        labRepository.findByCodeIgnoreCase("LAB-002").orElseGet(() -> {
+            log.info("Seeding default Computer Lab 2 (LAB-002)...");
+            return labRepository.save(Lab.builder()
+                    .name("Computer Lab 2")
+                    .code("LAB-002")
+                    .location("Building A, Room 102")
+                    .description("Artificial Intelligence & Data Science Laboratory")
+                    .status("ACTIVE")
+                    .createdAt(Instant.now())
+                    .build());
+        });
+
+        labRepository.findByCodeIgnoreCase("LAB-003").orElseGet(() -> {
+            log.info("Seeding default Computer Lab 3 (LAB-003)...");
+            return labRepository.save(Lab.builder()
+                    .name("Computer Lab 3")
+                    .code("LAB-003")
+                    .location("Building B, Room 201")
+                    .description("Computer Networks & Cybersecurity Laboratory")
+                    .status("ACTIVE")
+                    .createdAt(Instant.now())
+                    .build());
+        });
+
+        // 3. Clean up old mock sample computers
         computerRepository.findAll().stream()
                 .filter(c -> c.getHostname().startsWith("LAB-ALPHA") || c.getHostname().startsWith("LAB-BETA"))
                 .forEach(c -> {
@@ -51,7 +91,7 @@ public class DataInitializer implements CommandLineRunner {
                     computerRepository.delete(c);
                 });
 
-        // 3. Ensure Primary Admin Computer (LAPTOP-PALBUQS2) exists in DB
+        // 4. Ensure Primary Admin Computer (LAPTOP-PALBUQS2) exists in DB
         if (computerRepository.findByHostnameIgnoreCase("LAPTOP-PALBUQS2").isEmpty() && 
             computerRepository.findByAgentId("AGENT-9EA49A31").isEmpty()) {
             log.info("Seeding primary admin workstation endpoint (LAPTOP-PALBUQS2)...");
@@ -64,7 +104,8 @@ public class DataInitializer implements CommandLineRunner {
                     .macAddress("FA:54:F6:B4:98:23")
                     .osName("Windows 11 Pro 64-bit")
                     .osVersion("10.0.22631")
-                    .labName("Computer Lab")
+                    .lab(lab1)
+                    .labName(lab1.getName())
                     .cpuModel("11th Gen Intel(R) Core(TM) i5-11260H @ 2.60GHz")
                     .totalRamMb(8192.0)
                     .agentVersion("1.0.0")
@@ -73,7 +114,15 @@ public class DataInitializer implements CommandLineRunner {
                     .build();
 
             computerRepository.save(primary);
-            log.info("Primary admin workstation LAPTOP-PALBUQS2 seeded successfully.");
+            log.info("Primary admin workstation LAPTOP-PALBUQS2 seeded successfully in Computer Lab 1.");
         }
+
+        // 5. Safely link any unassigned existing computers to Computer Lab 1
+        computerRepository.findByLabIsNull().forEach(c -> {
+            log.info("Migrating unassigned computer {} to Computer Lab 1", c.getHostname());
+            c.setLab(lab1);
+            c.setLabName(lab1.getName());
+            computerRepository.save(c);
+        });
     }
 }

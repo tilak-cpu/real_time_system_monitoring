@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { metricsService, fetchRealApi } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import api from '../services/api';
 import { 
   CheckCircle2, 
@@ -27,6 +28,7 @@ import {
 
 const LabReadiness = () => {
   const navigate = useNavigate();
+  const { currentLab } = useLab();
   const [computers, setComputers] = useState([]);
   const [softwareList, setSoftwareList] = useState([]);
   const [requiredRules, setRequiredRules] = useState([]);
@@ -48,15 +50,15 @@ const LabReadiness = () => {
     fetchComputersAndReadiness();
     const interval = setInterval(fetchComputersAndReadiness, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentLab?.id]);
 
   const fetchComputersAndReadiness = async () => {
     setIsRechecking(true);
     try {
       const fetchApi = fetchRealApi || metricsService.fetchRealApi;
 
-      // 1. Fetch Computers List
-      const compRes = await metricsService.getAllComputers().catch(() => []);
+      // 1. Fetch Computers List (Lab Scoped)
+      const compRes = await metricsService.getAllComputers(currentLab?.id).catch(() => []);
       
       // 2. Fetch Fleet Software Summary
       const fleetRes = await fetchApi('/software/fleet-summary').catch(() => null);

@@ -25,4 +25,5 @@ COPY --from=backend-build /app/neurosys-backend/target/neurosys-backend-1.0.0-SN
 ENV PORT=8080
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Restrict JVM Heap to fit within Railway 512MB RAM Limit
+ENTRYPOINT ["java", "-Xms128m", "-Xmx384m", "-XX:+UseG1GC", "-jar", "app.jar"]

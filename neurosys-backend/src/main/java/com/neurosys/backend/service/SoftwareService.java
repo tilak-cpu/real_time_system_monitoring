@@ -22,6 +22,8 @@ public interface SoftwareService {
 
     LabReadinessDto getLabReadiness(String labName);
 
+    LabReadinessDto getLabReadiness(String labName, String labId);
+
     RequiredSoftware addRequiredSoftware(String labName, String softwareName, String requiredVersion);
 
     List<RequiredSoftware> getRequiredSoftwareForLab(String labName);

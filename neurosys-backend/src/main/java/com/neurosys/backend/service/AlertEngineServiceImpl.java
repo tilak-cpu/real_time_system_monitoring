@@ -372,6 +372,17 @@ public class AlertEngineServiceImpl implements AlertEngineService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<AlertDto> getAlertsByLabId(String labId) {
+        if (labId == null || labId.isEmpty() || "ALL".equalsIgnoreCase(labId)) {
+            return getAllAlerts();
+        }
+        return alertRepository.findAll().stream()
+                .filter(a -> a.getComputer() != null && a.getComputer().getLab() != null && labId.equals(a.getComputer().getLab().getId()))
+                .map(this::mapToDto).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<AlertDto> getComputerAlerts(String computerId) {
         return alertRepository.findByComputerIdOrderByTriggeredAtDesc(computerId)
                 .stream().map(this::mapToDto).toList();
@@ -408,10 +419,20 @@ public class AlertEngineServiceImpl implements AlertEngineService {
             }
         }
 
+        Computer comp = alert.getComputer();
+        String cName = comp != null && comp.getDisplayName() != null && !comp.getDisplayName().isEmpty() ? comp.getDisplayName() : (comp != null ? comp.getHostname() : "");
+        String lId = comp != null && comp.getLab() != null ? comp.getLab().getId() : "";
+        String lCode = comp != null && comp.getLab() != null ? comp.getLab().getCode() : "LAB";
+        String lName = comp != null && comp.getLab() != null ? comp.getLab().getName() : (comp != null && comp.getLabName() != null ? comp.getLabName() : "Computer Lab 1");
+
         return AlertDto.builder()
                 .id(alert.getId())
-                .computerId(alert.getComputer().getId())
-                .hostname(alert.getComputer().getHostname())
+                .computerId(comp != null ? comp.getId() : "")
+                .hostname(comp != null ? comp.getHostname() : "")
+                .computerName(cName)
+                .labId(lId)
+                .labCode(lCode)
+                .labName(lName)
                 .title(alert.getTitle())
                 .message(alert.getMessage())
                 .recommendedAction(alert.getRecommendedAction())

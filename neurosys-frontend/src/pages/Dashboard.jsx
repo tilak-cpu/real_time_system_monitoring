@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { metricsService } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import { 
   Monitor, 
   CheckCircle2, 
@@ -19,6 +20,7 @@ import {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { currentLab } = useLab();
   const [computers, setComputers] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [aiPredictions, setAiPredictions] = useState([]);
@@ -64,15 +66,16 @@ const Dashboard = () => {
       clearInterval(interval);
       if (eventSource) eventSource.close();
     };
-  }, []);
+  }, [currentLab?.id]);
 
   const fetchDashboardData = async () => {
     try {
-      // Safely fetch telemetry data with catch fallbacks to prevent uncaught promise failures
+      const activeLabId = currentLab?.id;
+      // Safely fetch lab-scoped telemetry data
       const [compData, alertData, readinessRes] = await Promise.all([
-        metricsService.getAllComputers().catch(() => []),
-        metricsService.getActiveAlerts().catch(() => []),
-        metricsService.fetchRealApi('/software/lab-readiness?labName=Computer%20Lab').catch(() => null)
+        metricsService.getAllComputers(activeLabId).catch(() => []),
+        metricsService.getActiveAlerts(activeLabId).catch(() => []),
+        metricsService.fetchRealApi(`/software/lab-readiness?labId=${activeLabId || ''}`).catch(() => null)
       ]);
 
       const compList = Array.isArray(compData) ? compData : (compData?.data || []);

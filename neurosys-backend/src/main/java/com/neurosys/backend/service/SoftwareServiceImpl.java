@@ -359,11 +359,24 @@ public class SoftwareServiceImpl implements SoftwareService {
     @Override
     @Transactional(readOnly = true)
     public LabReadinessDto getLabReadiness(String labName) {
-        String targetLab = "Computer Lab";
-        List<Computer> labComputers = computerRepository.findAll().stream()
-                .filter(c -> c.getStatus() != ComputerStatus.PENDING && c.getStatus() != ComputerStatus.REJECTED)
-                .toList();
+        return getLabReadiness(labName, null);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public LabReadinessDto getLabReadiness(String labName, String labId) {
+        List<Computer> labComputers;
+        if (labId != null && !labId.isEmpty() && !"ALL".equalsIgnoreCase(labId)) {
+            labComputers = computerRepository.findByLabId(labId).stream()
+                    .filter(c -> c.getStatus() != ComputerStatus.PENDING && c.getStatus() != ComputerStatus.REJECTED)
+                    .toList();
+        } else {
+            labComputers = computerRepository.findAll().stream()
+                    .filter(c -> c.getStatus() != ComputerStatus.PENDING && c.getStatus() != ComputerStatus.REJECTED)
+                    .toList();
+        }
+
+        String targetLab = (labName != null && !labName.isEmpty()) ? labName : "Computer Lab";
         List<RequiredSoftware> reqSoftware = requiredSoftwareRepository.findByLabName(targetLab);
         if (reqSoftware.isEmpty()) {
             reqSoftware = requiredSoftwareRepository.findAll();

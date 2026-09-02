@@ -4,26 +4,60 @@ const API_BASE = '/api/v1';
 
 /**
  * Resilient API Fetcher with Axios + Native Fetch fallback
- * Guarantees data arrays are cleanly unwrapped across all network conditions.
+ * Guarantees data arrays and HTTP requests (GET, POST, PUT, DELETE) are cleanly handled across all network conditions.
  */
-export const fetchRealApi = async (endpoint) => {
+export const fetchRealApi = async (endpoint, options = {}) => {
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const method = (options.method || 'GET').toUpperCase();
   
   // 1. Try Axios Service
   try {
-    const res = await api.get(path);
+    let res;
+    if (method === 'POST') {
+      let bodyData = {};
+      if (options.body) {
+        try {
+          bodyData = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        } catch (e) {
+          bodyData = options.body;
+        }
+      }
+      res = await api.post(path, bodyData);
+    } else if (method === 'PUT') {
+      let bodyData = {};
+      if (options.body) {
+        try {
+          bodyData = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        } catch (e) {
+          bodyData = options.body;
+        }
+      }
+      res = await api.put(path, bodyData);
+    } else if (method === 'DELETE') {
+      res = await api.delete(path);
+    } else {
+      res = await api.get(path);
+    }
+
     if (res && res.data !== undefined) {
       return res.data;
     }
     if (Array.isArray(res)) return res;
     if (res && typeof res === 'object') return res;
   } catch (axiosErr) {
-    console.warn(`Axios call to ${path} failed, attempting direct native fetch...`, axiosErr);
+    console.warn(`Axios ${method} call to ${path} failed, attempting direct native fetch...`, axiosErr);
   }
 
   // 2. Direct Native Fetch Fallback
   try {
-    const rawRes = await fetch(`${API_BASE}${path}`);
+    const fetchOptions = {
+      method,
+      headers: options.headers || { 'Content-Type': 'application/json' },
+    };
+    if (options.body) {
+      fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    }
+    const rawRes = await fetch(`${API_BASE}${path}`, fetchOptions);
     if (rawRes.ok) {
       const rawData = await rawRes.json();
       if (rawData && rawData.data !== undefined) {
@@ -32,7 +66,7 @@ export const fetchRealApi = async (endpoint) => {
       return rawData;
     }
   } catch (fetchErr) {
-    console.error(`Native fetch to ${API_BASE}${path} failed`, fetchErr);
+    console.error(`Native fetch ${method} to ${API_BASE}${path} failed`, fetchErr);
   }
 
   return null;
@@ -42,10 +76,11 @@ export const metricsService = {
   fetchRealApi,
   
   // Computer Management APIs
-  getAllComputers: async () => fetchRealApi('/computers'),
+  getAllComputers: async (labId) => fetchRealApi(labId && labId !== 'ALL' ? `/computers?labId=${labId}` : '/computers'),
   getPendingComputers: async () => fetchRealApi('/computers/pending'),
   getComputerById: async (id) => fetchRealApi(`/computers/${id}`),
   getComputersByLab: async (labName) => fetchRealApi(`/computers/lab/${labName}`),
+  getComputersByLabId: async (labId) => fetchRealApi(`/computers?labId=${labId}`),
   approveComputer: async (id) => api.put(`/computers/${id}/approve`),
   rejectComputer: async (id) => api.put(`/computers/${id}/reject`),
 
@@ -59,11 +94,14 @@ export const metricsService = {
     fetchRealApi(`/computers/${id}/logs?logLevel=${logLevel}&page=${page}&size=${size}`),
 
   // Alert Center APIs
-  getAllAlerts: async () => fetchRealApi('/alerts'),
-  getActiveAlerts: async () => fetchRealApi('/alerts'),
+  getAllAlerts: async (labId) => fetchRealApi(labId && labId !== 'ALL' ? `/alerts?labId=${labId}` : '/alerts'),
+  getActiveAlerts: async (labId) => fetchRealApi(labId && labId !== 'ALL' ? `/alerts?labId=${labId}` : '/alerts'),
   getComputerAlerts: async (id) => fetchRealApi(`/alerts/computer/${id}`),
   acknowledgeAlert: async (id) => api.put(`/alerts/${id}/acknowledge`),
   resolveAlert: async (id) => api.put(`/alerts/${id}/resolve`),
+
+  // Bulk Remote Power Management API
+  bulkPowerAction: async (labId, action, computerIds) => api.post(`/computers/bulk-power?labId=${labId || ''}&action=${action || 'SHUTDOWN'}`, computerIds || []),
 
   // Remote Power Management APIs
   lockComputer: async (computerId) => api.post(`/computers/${computerId}/lock`, {}),

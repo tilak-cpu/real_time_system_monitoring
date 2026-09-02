@@ -43,6 +43,13 @@ public class Computer extends BaseEntity {
     @Column(name = "lab_name", length = 100)
     private String labName;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "lab_id")
+    private Lab lab;
+
+    @Column(name = "display_name", length = 100)
+    private String displayName;
+
     @Column(name = "cpu_model", length = 150)
     private String cpuModel;
 

@@ -154,6 +154,18 @@ public class AgentConfig {
         return Integer.parseInt(properties.getProperty("agent.collection.interval.seconds", "1"));
     }
 
+    public static String getEnrollmentCode() {
+        String envCode = System.getenv("NEUROSYS_ENROLLMENT_CODE");
+        if (envCode != null && !envCode.trim().isEmpty()) {
+            return envCode.trim();
+        }
+        String sysCode = System.getProperty("agent.enrollment.code");
+        if (sysCode != null && !sysCode.trim().isEmpty()) {
+            return sysCode.trim();
+        }
+        return properties.getProperty("agent.enrollment.code", "");
+    }
+
     public static String getAgentId() {
         return agentId;
     }

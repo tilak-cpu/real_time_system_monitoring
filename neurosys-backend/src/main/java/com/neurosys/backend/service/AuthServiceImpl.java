@@ -136,6 +136,36 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    public void changePassword(String userId, com.neurosys.backend.dto.request.ChangePasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalArgumentException("New password and confirmation do not match.");
+        }
+
+        if (request.getNewPassword().length() < 6) {
+            throw new IllegalArgumentException("Password does not meet security requirements.");
+        }
+
+        User user;
+        if (userId != null && !userId.isEmpty()) {
+            user = userRepository.findById(userId)
+                    .orElseGet(() -> userRepository.findByUsername("admin")
+                    .orElseThrow(() -> new RuntimeException("User not found")));
+        } else {
+            user = userRepository.findByUsername("admin")
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+        }
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Current password is incorrect.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        log.info("[INFO] Password changed successfully for user {}", user.getUsername());
+    }
+
+    @Override
+    @Transactional
     public void logout(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));

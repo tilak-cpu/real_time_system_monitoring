@@ -53,6 +53,18 @@ public class RemotePowerController {
         return ResponseEntity.ok(ApiResponse.success("Shutdown command issued successfully", command));
     }
 
+    @PostMapping("/computers/bulk-power")
+    @Operation(summary = "Bulk Remote Power Action", description = "Execute bulk power command (LOCK, RESTART, SHUTDOWN) scoped to a specific lab or selected workstations")
+    public ResponseEntity<ApiResponse<List<RemotePowerCommandDto>>> bulkPowerAction(
+            @RequestParam(required = false) String labId,
+            @RequestParam(required = false, defaultValue = "SHUTDOWN") PowerCommandType action,
+            @RequestBody(required = false) List<String> computerIds,
+            Principal principal) {
+        String username = principal != null ? principal.getName() : "Administrator";
+        List<RemotePowerCommandDto> commands = remotePowerService.issueBulkCommands(labId, computerIds, action, username);
+        return ResponseEntity.ok(ApiResponse.success("Bulk power commands issued successfully", commands));
+    }
+
     @GetMapping("/computers/{computerId}/power-audits")
     @Operation(summary = "Get Power Action Audit History", description = "Retrieve audit log history for remote power actions on computer")
     public ResponseEntity<ApiResponse<List<RemotePowerAuditDto>>> getPowerAudits(@PathVariable String computerId) {

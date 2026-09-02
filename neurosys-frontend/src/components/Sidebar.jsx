@@ -33,6 +33,7 @@ const Sidebar = () => {
 
   const navItems = [
     { name: 'Overview', path: '/dashboard', icon: 'dashboard' },
+    { name: 'Laboratories', path: '/labs', icon: 'meeting_room' },
     { name: 'My Laptop (PALBUQS2)', path: '/admin-laptop', icon: 'laptop_mac', highlight: true },
     { name: 'Computers', path: '/computers', icon: 'desktop_windows' },
     { name: 'Alerts', path: '/alerts', icon: 'warning', badge: activeAlertCount },
@@ -51,14 +52,14 @@ const Sidebar = () => {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="font-headline-md text-body-lg font-bold text-on-surface truncate">
-            {user?.username || user?.name || 'Admin'}
+            {user?.username || user?.name || 'admin'}
           </h2>
           <p className="text-label-md font-label-md text-secondary truncate">Lab Supervisor</p>
         </div>
       </div>
 
       {/* Nav Items */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
         {navItems.map((item) => (
           <NavLink
             key={item.name}

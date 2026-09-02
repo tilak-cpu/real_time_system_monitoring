@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
 import { metricsService } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import { 
   Laptop, 
   Search, 
@@ -34,6 +35,7 @@ const formatLastSeen = (timestamp) => {
 
 const Computers = () => {
   const navigate = useNavigate();
+  const { currentLab } = useLab();
   const [searchParams] = useSearchParams();
   const statusParam = searchParams.get('status');
 
@@ -90,11 +92,11 @@ const Computers = () => {
       clearInterval(interval);
       if (eventSource) eventSource.close();
     };
-  }, []);
+  }, [currentLab?.id]);
 
   const fetchComputers = async () => {
     try {
-      const data = await metricsService.getAllComputers();
+      const data = await metricsService.getAllComputers(currentLab?.id);
       const compList = Array.isArray(data) ? data : (data?.data || []);
       if (Array.isArray(compList)) {
         setComputers([...compList]);
@@ -397,9 +399,19 @@ const Computers = () => {
                       </td>
                       <td 
                         onClick={() => navigate(`/computers/${comp.id}`)}
-                        className="p-3 font-bold text-primary cursor-pointer hover:underline"
+                        className="p-3 cursor-pointer"
                       >
-                        {comp.hostname} {isLaptop ? '(Your Admin Laptop)' : ''}
+                        <div className="flex flex-col">
+                          <span className="font-bold text-primary hover:underline">
+                            {comp.displayName || comp.computerName || comp.hostname} {isLaptop ? '(Admin Laptop)' : ''}
+                          </span>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
+                            <span className="bg-primary/10 text-primary font-bold px-1.5 py-0.2 rounded border border-primary/20">
+                              {comp.labName || 'Computer Lab 1'} ({comp.labCode || 'LAB-001'})
+                            </span>
+                            <span>Host: {comp.hostname}</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3 font-mono-sm text-slate-700 font-semibold">{comp.ipAddress || '10.33.199.161'}</td>
                       <td className="p-3 font-mono-sm font-bold text-primary">{cpu}%</td>

@@ -48,8 +48,9 @@ public class SoftwareController {
     @GetMapping("/lab-readiness")
     @Operation(summary = "Check Lab Software Readiness", description = "Evaluate whether computers in a lab meet required software stack criteria for upcoming classes")
     public ResponseEntity<ApiResponse<LabReadinessDto>> getLabReadiness(
-            @RequestParam(required = false, defaultValue = "General Lab") String labName) {
-        LabReadinessDto readiness = softwareService.getLabReadiness(labName);
+            @RequestParam(required = false, defaultValue = "General Lab") String labName,
+            @RequestParam(required = false) String labId) {
+        LabReadinessDto readiness = softwareService.getLabReadiness(labName, labId);
         return ResponseEntity.ok(ApiResponse.success("Lab readiness evaluated", readiness));
     }
 

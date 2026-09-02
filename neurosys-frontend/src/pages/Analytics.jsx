@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { metricsService } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Analytics = () => {
+  const { currentLab } = useLab();
   const [computers, setComputers] = useState([]);
   const [selectedComputerId, setSelectedComputerId] = useState('');
   const [prediction, setPrediction] = useState(null);
@@ -11,7 +13,7 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchComputers();
-  }, []);
+  }, [currentLab?.id]);
 
   useEffect(() => {
     if (selectedComputerId) {
@@ -21,7 +23,7 @@ const Analytics = () => {
 
   const fetchComputers = async () => {
     try {
-      const data = await metricsService.getAllComputers();
+      const data = await metricsService.getAllComputers(currentLab?.id);
       const compList = Array.isArray(data) ? data : (data?.data || []);
       const validComps = Array.isArray(compList) ? compList : [];
       setComputers(validComps);

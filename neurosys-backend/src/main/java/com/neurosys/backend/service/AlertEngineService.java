@@ -11,6 +11,7 @@ public interface AlertEngineService {
     void triggerOfflineAlert(Computer computer);
     void resolveOfflineAlert(Computer computer);
     List<AlertDto> getAllAlerts();
+    List<AlertDto> getAlertsByLabId(String labId);
     List<AlertDto> getComputerAlerts(String computerId);
     AlertDto acknowledgeAlert(String alertId);
     AlertDto resolveAlert(String alertId);

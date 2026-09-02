@@ -54,6 +54,16 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Password reset successfully"));
     }
 
+    @PostMapping("/change-password")
+    @Operation(summary = "Change Authenticated User Password", description = "Validate current password and set new password for authenticated user")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @Valid @RequestBody com.neurosys.backend.dto.request.ChangePasswordRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String userId = userPrincipal != null ? userPrincipal.getId() : null;
+        authService.changePassword(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully"));
+    }
+
     @PostMapping("/logout")
     @Operation(summary = "User Logout", description = "Revoke active refresh tokens for the authenticated user")
     public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal UserPrincipal userPrincipal) {

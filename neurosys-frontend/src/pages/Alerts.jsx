@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { metricsService } from '../services/metricsService';
+import { useLab } from '../contexts/LabContext';
 import { 
   Bell, 
   AlertTriangle, 
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 const Alerts = () => {
+  const { currentLab } = useLab();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'RESOLVED'
@@ -28,11 +30,11 @@ const Alerts = () => {
     fetchAlerts();
     const interval = setInterval(fetchAlerts, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentLab?.id]);
 
   const fetchAlerts = async () => {
     try {
-      const res = await metricsService.getAllAlerts();
+      const res = await metricsService.getAllAlerts(currentLab?.id);
       const list = res?.data || (Array.isArray(res) ? res : []);
       if (Array.isArray(list)) {
         setAlerts(list);
@@ -188,7 +190,7 @@ const Alerts = () => {
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className={`font-label-md text-label-md px-2.5 py-0.5 rounded-full font-bold uppercase ${
                           isResolved 
                             ? 'bg-emerald-500 text-white' 
@@ -199,9 +201,19 @@ const Alerts = () => {
                           {isResolved ? '🟢 RESOLVED' : isCritical ? '🔴 URGENT' : '🟠 NEEDS ATTENTION'}
                         </span>
 
-                        <span className="font-mono-sm text-mono-sm font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
-                          {alert.hostname || alert.computerHostname || 'Workstation'}
+                        <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                          🏢 {alert.labName || 'Computer Lab 1'}
                         </span>
+
+                        <span className="font-mono-sm text-mono-sm font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
+                          💻 {alert.computerName || alert.hostname || 'Workstation'}
+                        </span>
+
+                        {alert.hostname && alert.computerName && alert.hostname !== alert.computerName && (
+                          <span className="text-[11px] font-mono text-slate-500">
+                            ({alert.hostname})
+                          </span>
+                        )}
 
                         {alert.occurrenceCount > 1 && (
                           <span className="font-label-md text-label-md bg-primary-container/20 text-primary px-2 py-0.5 rounded font-bold">

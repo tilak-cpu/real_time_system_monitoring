@@ -1,10 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LabProvider } from './contexts/LabContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
+import LabSelection from './pages/LabSelection';
+import LabManagement from './pages/LabManagement';
 import Dashboard from './pages/Dashboard';
 import AdminLaptopPerformance from './pages/AdminLaptopPerformance';
 import Computers from './pages/Computers';
@@ -32,7 +35,7 @@ function AppRoutes() {
       <Route 
         path="/" 
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />
+          isAuthenticated ? <Navigate to="/select-lab" replace /> : <LandingPage />
         } 
       />
 
@@ -40,21 +43,36 @@ function AppRoutes() {
       <Route 
         path="/login" 
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />
+          isAuthenticated ? <Navigate to="/select-lab" replace /> : <Login />
         } 
       />
 
-      {/* 3. Protected Dashboard & Admin Pages */}
+      {/* 3. Post-Login Lab Selection Page */}
+      <Route
+        path="/select-lab"
+        element={
+          <ProtectedRoute>
+            <LabProvider>
+              <LabSelection />
+            </LabProvider>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 4. Protected Dashboard & Admin Pages */}
       <Route
         element={
           <ProtectedRoute>
-            <WebSocketProvider>
-              <Layout />
-            </WebSocketProvider>
+            <LabProvider>
+              <WebSocketProvider>
+                <Layout />
+              </WebSocketProvider>
+            </LabProvider>
           </ProtectedRoute>
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/labs" element={<LabManagement />} />
         <Route path="/admin-laptop" element={<AdminLaptopPerformance />} />
         <Route path="/computers" element={<Computers />} />
         <Route path="/software" element={<Software />} />
@@ -66,10 +84,10 @@ function AppRoutes() {
         <Route path="/settings" element={<Settings />} />
       </Route>
 
-      {/* 4. Catch-all fallback route */}
+      {/* 5. Catch-all fallback route */}
       <Route 
         path="*" 
-        element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} 
+        element={<Navigate to={isAuthenticated ? "/select-lab" : "/"} replace />} 
       />
     </Routes>
   );

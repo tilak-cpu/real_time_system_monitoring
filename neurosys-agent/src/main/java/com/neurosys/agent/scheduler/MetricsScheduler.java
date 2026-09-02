@@ -96,7 +96,8 @@ public class MetricsScheduler {
         regPayload.put("macAddress", networkCollector.getMacAddress());
         regPayload.put("osName", systemInfoCollector.getOsName());
         regPayload.put("osVersion", systemInfoCollector.getOsVersion());
-        regPayload.put("labName", "Computer Lab");
+        regPayload.put("labName", AgentConfig.getLabName());
+        regPayload.put("enrollmentCode", AgentConfig.getEnrollmentCode());
         regPayload.put("cpuModel", cpuCollector.getCpuName());
         regPayload.put("totalRamMb", memoryCollector.getTotalRamMb());
         regPayload.put("agentVersion", "1.0.0");

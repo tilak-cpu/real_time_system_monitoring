@@ -1,5 +1,6 @@
 package com.neurosys.backend.service;
 
+import com.neurosys.backend.dto.request.ChangePasswordRequest;
 import com.neurosys.backend.dto.request.ForgotPasswordRequest;
 import com.neurosys.backend.dto.request.LoginRequest;
 import com.neurosys.backend.dto.request.RefreshTokenRequest;
@@ -13,6 +14,7 @@ public interface AuthService {
     TokenRefreshResponse refreshToken(RefreshTokenRequest request);
     void forgotPassword(ForgotPasswordRequest request);
     void resetPassword(ResetPasswordRequest request);
+    void changePassword(String userId, ChangePasswordRequest request);
     void logout(String userId);
     UserProfileResponse getCurrentUserProfile(String userId);
 }
