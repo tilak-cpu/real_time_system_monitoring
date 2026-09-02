@@ -16,12 +16,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -73,7 +71,7 @@ public class AgentDownloadController {
             String propsContent = String.format(
                     "# NeuroSys Agent Configuration Package\n" +
                     "# Generated for: %s (%s)\n" +
-                    "server.url=http://localhost:8080/api/v1\n" +
+                    "server.url=https://realtimesystemmonitoring-production.up.railway.app/api/v1\n" +
                     "agent.enrollment.code=%s\n" +
                     "agent.lab.name=%s\n" +
                     "agent.collection.interval.seconds=1\n",
@@ -84,23 +82,13 @@ public class AgentDownloadController {
             zos.write(propsContent.getBytes());
             zos.closeEntry();
 
-            // 2. Write start-agent.bat
-            String batContent = String.format(
-                    "@echo off\n" +
-                    "title NeuroSys Telemetry Agent - %s\n" +
-                    "echo ==================================================\n" +
-                    "echo Starting NeuroSys Monitoring Agent for %s\n" +
-                    "echo Lab Code: %s\n" +
-                    "echo Enrollment Token: %s\n" +
-                    "echo ==================================================\n" +
-                    "java -jar neurosys-agent-1.0.0.jar\n" +
-                    "pause\n",
-                    lab.getName(), lab.getName(), lab.getCode(), activeCode
-            );
-            ZipEntry batEntry = new ZipEntry("start-agent.bat");
-            zos.putNextEntry(batEntry);
-            zos.write(batContent.getBytes());
-            zos.closeEntry();
+            // 2. Include helper batch files from neurosys-agent directory if available
+            addFileToZip(zos, "setup-agent.bat", Paths.get("..", "neurosys-agent", "setup-agent.bat"), Paths.get("neurosys-agent", "setup-agent.bat"));
+            addFileToZip(zos, "start-agent.bat", Paths.get("..", "neurosys-agent", "start-agent.bat"), Paths.get("neurosys-agent", "start-agent.bat"));
+            addFileToZip(zos, "stop-agent.bat", Paths.get("..", "neurosys-agent", "stop-agent.bat"), Paths.get("neurosys-agent", "stop-agent.bat"));
+            addFileToZip(zos, "uninstall-agent.bat", Paths.get("..", "neurosys-agent", "uninstall-agent.bat"), Paths.get("neurosys-agent", "uninstall-agent.bat"));
+            addFileToZip(zos, "Run-NeuroSys-Agent.bat", Paths.get("..", "neurosys-agent", "Run-NeuroSys-Agent.bat"), Paths.get("neurosys-agent", "Run-NeuroSys-Agent.bat"));
+            addFileToZip(zos, "install-service.ps1", Paths.get("..", "neurosys-agent", "install-service.ps1"), Paths.get("neurosys-agent", "install-service.ps1"));
 
             // 3. Write README-INSTALLATION.txt
             String readmeContent = String.format(
@@ -112,26 +100,35 @@ public class AgentDownloadController {
                     "=========================================================\n\n" +
                     "INSTRUCTIONS FOR SYSTEM ADMINISTRATORS:\n\n" +
                     "1. Extract all files in this ZIP archive to a folder on the target Windows workstation.\n" +
-                    "2. Ensure Java 17+ (JDK/JRE) is installed.\n" +
-                    "3. Run 'start-agent.bat' (or execute: java -jar neurosys-agent-1.0.0.jar).\n" +
-                    "4. The workstation will securely enroll and automatically appear under %s.\n\n" +
+                    "2. Run 'setup-agent.bat' once to register the background agent service.\n" +
+                    "3. Use 'start-agent.bat' or 'stop-agent.bat' to start or stop the agent.\n" +
+                    "4. To completely remove the agent, run 'uninstall-agent.bat'.\n\n" +
                     "Need assistance? Contact your NeuroSys Lab Supervisor.\n",
-                    lab.getName(), lab.getCode(), activeCode, Instant.now().toString(), lab.getName()
+                    lab.getName(), lab.getCode(), activeCode, Instant.now().toString()
             );
             ZipEntry readmeEntry = new ZipEntry("README-INSTALLATION.txt");
             zos.putNextEntry(readmeEntry);
             zos.write(readmeContent.getBytes());
             zos.closeEntry();
 
-            // 4. Attach compiled neurosys-agent JAR if available on filesystem
-            Path agentJarPath = Paths.get("..", "neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT.jar");
+            // 4. Attach compiled neurosys-agent JAR under both exact and alias names for backwards compatibility
+            Path agentJarPath = Paths.get("..", "neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
             if (!Files.exists(agentJarPath)) {
-                agentJarPath = Paths.get("neurosys-agent-1.0.0-SNAPSHOT.jar");
+                agentJarPath = Paths.get("neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+            }
+            if (!Files.exists(agentJarPath)) {
+                agentJarPath = Paths.get("neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
             }
             if (Files.exists(agentJarPath)) {
                 byte[] jarBytes = Files.readAllBytes(agentJarPath);
-                ZipEntry jarEntry = new ZipEntry("neurosys-agent-1.0.0.jar");
-                zos.putNextEntry(jarEntry);
+
+                ZipEntry jarEntry1 = new ZipEntry("neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+                zos.putNextEntry(jarEntry1);
+                zos.write(jarBytes);
+                zos.closeEntry();
+
+                ZipEntry jarEntry2 = new ZipEntry("neurosys-agent-1.0.0.jar");
+                zos.putNextEntry(jarEntry2);
                 zos.write(jarBytes);
                 zos.closeEntry();
             }
@@ -152,6 +149,21 @@ public class AgentDownloadController {
         } catch (Exception e) {
             log.error("Failed to generate agent download package ZIP", e);
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    private void addFileToZip(ZipOutputStream zos, String entryName, Path path1, Path path2) {
+        try {
+            Path targetPath = Files.exists(path1) ? path1 : (Files.exists(path2) ? path2 : null);
+            if (targetPath != null) {
+                byte[] content = Files.readAllBytes(targetPath);
+                ZipEntry entry = new ZipEntry(entryName);
+                zos.putNextEntry(entry);
+                zos.write(content);
+                zos.closeEntry();
+            }
+        } catch (Exception e) {
+            log.warn("Could not bundle file {} in zip: {}", entryName, e.getMessage());
         }
     }
 }
