@@ -148,13 +148,14 @@ public class MetricsSender {
                 }
                 log.info("Successfully transmitted metrics payload to server. CPU: {}%, RAM: {}%",
                         payload.get("cpuUsagePercent"), payload.get("memoryUsagePercent"));
-            } else if (response.statusCode() == 404 || response.statusCode() == 500) {
-                log.warn("[INFO] Server reported status {}. Triggering re-registration sequence.", response.statusCode());
+            } else if (response.statusCode() == 404 || response.statusCode() == 401) {
+                log.warn("[INFO] Server reported authentication/registration status {}. Triggering re-registration sequence.", response.statusCode());
                 wasOffline = true;
                 cacheManager.cacheUnsentPayload(payload);
             } else {
+                // 5xx (500, 502, 503, 504) server error or network issue -> Cache & Retry, DO NOT re-register!
                 if (!wasOffline) {
-                    log.warn("Server returned HTTP error status: {}. Caching payload locally.", response.statusCode());
+                    log.warn("Server returned transient HTTP status {}. Caching telemetry payload locally for retry.", response.statusCode());
                     wasOffline = true;
                 }
                 cacheManager.cacheUnsentPayload(payload);

@@ -30,38 +30,42 @@ public class OfflineDetectionScheduler {
     @Scheduled(fixedRate = 1000) // Runs every 1 second for instant ~1-2s offline detection
     @Transactional
     public void detectOfflineComputers() {
-        // 2-second tolerance threshold for network delay
-        Instant threshold = Instant.now().minus(2, ChronoUnit.SECONDS);
-        Map<String, Instant> heartbeatMap = heartbeatTracker.getLastHeartbeatMap();
+        try {
+            // 2-second tolerance threshold for network delay
+            Instant threshold = Instant.now().minus(2, ChronoUnit.SECONDS);
+            Map<String, Instant> heartbeatMap = heartbeatTracker.getLastHeartbeatMap();
 
-        List<Computer> onlineComputers = computerRepository.findAll().stream()
-                .filter(c -> c.getStatus() == ComputerStatus.ONLINE 
-                          || c.getStatus() == ComputerStatus.WARNING 
-                          || c.getStatus() == ComputerStatus.CRITICAL)
-                .toList();
+            List<Computer> onlineComputers = computerRepository.findAll().stream()
+                    .filter(c -> c.getStatus() == ComputerStatus.ONLINE 
+                              || c.getStatus() == ComputerStatus.WARNING 
+                              || c.getStatus() == ComputerStatus.CRITICAL)
+                    .toList();
 
-        for (Computer c : onlineComputers) {
-            Instant lastSeen = heartbeatMap.get(c.getId());
-            if (lastSeen == null) {
-                lastSeen = heartbeatMap.get(c.getAgentId());
+            for (Computer c : onlineComputers) {
+                Instant lastSeen = heartbeatMap.get(c.getId());
+                if (lastSeen == null) {
+                    lastSeen = heartbeatMap.get(c.getAgentId());
+                }
+                if (lastSeen == null) {
+                    lastSeen = c.getLastSeenAt();
+                }
+
+                if (lastSeen == null || lastSeen.isBefore(threshold)) {
+                    ComputerStatus oldStatus = c.getStatus();
+                    log.info("[REAL-TIME DETECT] PC {} ({}) missed heartbeat (>2s). Status changed {} → OFFLINE", 
+                            c.getHostname(), c.getAgentId(), oldStatus);
+
+                    c.setStatus(ComputerStatus.OFFLINE);
+                    c.setUpdatedAt(Instant.now());
+                    computerRepository.save(c);
+
+                    // Broadcast real-time status change event to all WebSocket & SSE clients
+                    webSocketMetricsPublisher.broadcastStatusChange(c, ComputerStatus.OFFLINE, "Connection lost / Heartbeat stopped (>2s)");
+                    alertEngineService.triggerOfflineAlert(c);
+                }
             }
-            if (lastSeen == null) {
-                lastSeen = c.getLastSeenAt();
-            }
-
-            if (lastSeen == null || lastSeen.isBefore(threshold)) {
-                ComputerStatus oldStatus = c.getStatus();
-                log.info("[REAL-TIME DETECT] PC {} ({}) missed heartbeat (>2s). Status changed {} → OFFLINE", 
-                        c.getHostname(), c.getAgentId(), oldStatus);
-
-                c.setStatus(ComputerStatus.OFFLINE);
-                c.setUpdatedAt(Instant.now());
-                computerRepository.save(c);
-
-                // Broadcast real-time status change event to all WebSocket & SSE clients
-                webSocketMetricsPublisher.broadcastStatusChange(c, ComputerStatus.OFFLINE, "Connection lost / Heartbeat stopped (>2s)");
-                alertEngineService.triggerOfflineAlert(c);
-            }
+        } catch (Exception e) {
+            log.warn("[OFFLINE SCHEDULER] Transient error during offline check (will retry in next cycle): {}", e.getMessage());
         }
     }
 }
