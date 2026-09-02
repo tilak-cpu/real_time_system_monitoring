@@ -107,6 +107,7 @@ public class AgentDownloadController {
                     "    ping -n 4 127.0.0.1 >nul\r\n" +
                     "    exit /b 1\r\n" +
                     ")\r\n" +
+                    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$TaskName = 'NeuroSysAgent'; $ScriptDir = '%~dp0'; $BatLauncher = Join-Path $ScriptDir 'Run-NeuroSys-Agent.bat'; try { if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) { $Action = New-ScheduledTaskAction -Execute 'cmd.exe' -ArgumentList \\\"/c `\\\"$BatLauncher`\\\"\\\" -WorkingDirectory $ScriptDir; $TriggerLogon = New-ScheduledTaskTrigger -AtLogon; $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null } } catch {}; try { $StartupFolder = [Environment]::GetFolderPath('Startup'); $ShortcutPath = Join-Path $StartupFolder 'NeuroSysAgent.lnk'; if (-not (Test-Path $ShortcutPath)) { $WScriptShell = New-Object -ComObject WScript.Shell; $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath); $Shortcut.TargetPath = $BatLauncher; $Shortcut.WorkingDirectory = $ScriptDir; $Shortcut.WindowStyle = 7; $Shortcut.Save() } } catch {}\" >nul 2>&1\r\n" +
                     "for /f \"tokens=*\" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId\"') do (\r\n" +
                     "    if not \"%%P\"==\"\" (\r\n" +
                     "        echo NeuroSys Agent\r\n" +
@@ -334,9 +335,10 @@ public class AgentDownloadController {
                     "=========================================================\n\n" +
                     "INSTRUCTIONS FOR SYSTEM ADMINISTRATORS:\n\n" +
                     "1. Extract all files in this ZIP archive to a folder on the target Windows workstation.\n" +
-                    "2. Run 'start-agent.bat' to start the agent immediately.\n" +
-                    "3. Run 'stop-agent.bat' to stop the agent.\n" +
-                    "4. Run 'uninstall-agent.bat' for a complete clean uninstallation.\n\n" +
+                    "2. Run 'start-agent.bat' or 'setup-agent.bat' once. This automatically configures Windows Auto-Boot.\n" +
+                    "3. Whenever Windows turns ON or reboots, the agent automatically starts in the background and reconnects ONLINE!\n" +
+                    "4. Use 'stop-agent.bat' to stop the agent.\n" +
+                    "5. Run 'uninstall-agent.bat' for a complete clean uninstallation.\n\n" +
                     "Need assistance? Contact your NeuroSys Lab Supervisor.\n",
                     lab.getName(), lab.getCode(), activeCode, Instant.now().toString()
             );
