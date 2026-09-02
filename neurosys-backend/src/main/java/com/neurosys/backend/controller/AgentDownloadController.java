@@ -342,16 +342,30 @@ public class AgentDownloadController {
             );
             writeZipEntry(zos, "README-INSTALLATION.txt", readmeContent.getBytes());
 
-            // 9. Attach compiled neurosys-agent JAR
-            Path agentJarPath = Paths.get("..", "neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
-            if (!Files.exists(agentJarPath)) {
-                agentJarPath = Paths.get("neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+            // 9. Attach compiled neurosys-agent JAR from classpath or filesystem
+            byte[] jarBytes = null;
+            try (InputStream is = getClass().getResourceAsStream("/static/agent-bin/neurosys-agent-1.0.0-SNAPSHOT-exec.jar")) {
+                if (is != null) {
+                    jarBytes = is.readAllBytes();
+                }
+            } catch (Exception e) {
+                log.warn("Could not read agent jar from classpath resource: {}", e.getMessage());
             }
-            if (!Files.exists(agentJarPath)) {
-                agentJarPath = Paths.get("neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+
+            if (jarBytes == null || jarBytes.length == 0) {
+                Path agentJarPath = Paths.get("..", "neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+                if (!Files.exists(agentJarPath)) {
+                    agentJarPath = Paths.get("neurosys-agent", "target", "neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+                }
+                if (!Files.exists(agentJarPath)) {
+                    agentJarPath = Paths.get("neurosys-agent-1.0.0-SNAPSHOT-exec.jar");
+                }
+                if (Files.exists(agentJarPath)) {
+                    jarBytes = Files.readAllBytes(agentJarPath);
+                }
             }
-            if (Files.exists(agentJarPath)) {
-                byte[] jarBytes = Files.readAllBytes(agentJarPath);
+
+            if (jarBytes != null && jarBytes.length > 0) {
                 writeZipEntry(zos, "neurosys-agent-1.0.0-SNAPSHOT-exec.jar", jarBytes);
                 writeZipEntry(zos, "neurosys-agent-1.0.0.jar", jarBytes);
             }
