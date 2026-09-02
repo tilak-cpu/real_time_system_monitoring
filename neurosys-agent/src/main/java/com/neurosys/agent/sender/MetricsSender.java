@@ -2,6 +2,7 @@ package com.neurosys.agent.sender;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neurosys.agent.config.AgentConfig;
+import com.neurosys.agent.tray.AgentTrayManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +58,7 @@ public class MetricsSender {
                             log.info("[INFO] Agent connection restored. Server connection re-established.");
                             wasOffline = false;
                         }
+                        AgentTrayManager.getInstance().updateStatus(true, Instant.now());
                         return true;
                     }
                 }
@@ -64,12 +67,14 @@ public class MetricsSender {
                     log.warn("[INFO] Server returned HTTP status {}. Retrying in next cycle...", response.statusCode());
                     wasOffline = true;
                 }
+                AgentTrayManager.getInstance().updateStatus(false, null);
             }
         } catch (Exception e) {
             if (!wasOffline) {
                 log.warn("[INFO] Agent connection lost ({}). Retrying in next cycle...", e.getMessage());
                 wasOffline = true;
             }
+            AgentTrayManager.getInstance().updateStatus(false, null);
         }
         return false;
     }
@@ -114,13 +119,17 @@ public class MetricsSender {
                     log.info("[INFO] Agent connection restored via fast heartbeat.");
                     wasOffline = false;
                 }
+                AgentTrayManager.getInstance().updateStatus(true, Instant.now());
                 return true;
+            } else {
+                AgentTrayManager.getInstance().updateStatus(false, null);
             }
         } catch (Exception e) {
             if (!wasOffline) {
                 log.debug("Heartbeat ping dropped: {}", e.getMessage());
                 wasOffline = true;
             }
+            AgentTrayManager.getInstance().updateStatus(false, null);
         }
         return false;
     }
@@ -146,11 +155,13 @@ public class MetricsSender {
                     log.info("[INFO] Agent connection restored. Resuming live telemetry transmission.");
                     wasOffline = false;
                 }
+                AgentTrayManager.getInstance().updateStatus(true, Instant.now());
                 log.info("Successfully transmitted metrics payload to server. CPU: {}%, RAM: {}%",
                         payload.get("cpuUsagePercent"), payload.get("memoryUsagePercent"));
             } else if (response.statusCode() == 404 || response.statusCode() == 401) {
                 log.warn("[INFO] Server reported authentication/registration status {}. Triggering re-registration sequence.", response.statusCode());
                 wasOffline = true;
+                AgentTrayManager.getInstance().updateStatus(false, null);
                 cacheManager.cacheUnsentPayload(payload);
             } else {
                 // 5xx (500, 502, 503, 504) server error or network issue -> Cache & Retry, DO NOT re-register!
@@ -158,6 +169,7 @@ public class MetricsSender {
                     log.warn("Server returned transient HTTP status {}. Caching telemetry payload locally for retry.", response.statusCode());
                     wasOffline = true;
                 }
+                AgentTrayManager.getInstance().updateStatus(false, null);
                 cacheManager.cacheUnsentPayload(payload);
             }
         } catch (Exception e) {
@@ -165,6 +177,7 @@ public class MetricsSender {
                 log.warn("[INFO] Agent connection lost ({}). Caching metrics payload on local disk.", e.getMessage());
                 wasOffline = true;
             }
+            AgentTrayManager.getInstance().updateStatus(false, null);
             cacheManager.cacheUnsentPayload(payload);
         }
     }

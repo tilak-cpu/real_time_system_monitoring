@@ -35,14 +35,17 @@ if not defined ACTIVE_JAR (
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$TaskName = 'NeuroSysAgent'; $ScriptDir = '%~dp0'; $WScriptExe = Join-Path $env:SystemRoot 'System32\wscript.exe'; $SilentVbs = Join-Path $ScriptDir 'Run-Silent.vbs'; $BatLauncher = Join-Path $ScriptDir 'Run-NeuroSys-Agent.bat'; try { if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) { $Action = New-ScheduledTaskAction -Execute $WScriptExe -ArgumentList \"`\"$SilentVbs`\" `\"$BatLauncher`\"\" -WorkingDirectory $ScriptDir; $TriggerLogon = New-ScheduledTaskTrigger -AtLogon; $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null } } catch {}; try { $StartupFolder = [Environment]::GetFolderPath('Startup'); $ShortcutPath = Join-Path $StartupFolder 'NeuroSysAgent.lnk'; if (-not (Test-Path $ShortcutPath)) { $WScriptShell = New-Object -ComObject WScript.Shell; $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath); $Shortcut.TargetPath = $WScriptExe; $Shortcut.Arguments = \"`\"$SilentVbs`\" `\"$BatLauncher`\"\"; $Shortcut.WorkingDirectory = $ScriptDir; $Shortcut.WindowStyle = 7; $Shortcut.Save() } } catch {}" >nul 2>&1
 
 :: 4. Check if already running
+set "ALREADY_RUNNING=0"
 for /f "tokens=*" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId"') do (
-    if not "%%P"=="" (
-        echo NeuroSys Agent is running silently in the background.
-        echo Status: RUNNING
-        echo.
-        ping -n 3 127.0.0.1 >nul
-        exit /b 0
-    )
+    if not "%%P"=="" set "ALREADY_RUNNING=1"
+)
+
+if "%ALREADY_RUNNING%"=="1" (
+    echo NeuroSys Agent is running silently in the background.
+    echo Status: RUNNING
+    echo.
+    ping -n 3 127.0.0.1 >nul
+    exit /b 0
 )
 
 :: 5. Start Silent Background Daemon
@@ -65,6 +68,8 @@ if "%IS_RUNNING%"=="1" (
     echo.
     echo (This control window will close automatically. The Agent will continue running silently.)
     echo.
+    ping -n 3 127.0.0.1 >nul
+    exit /b 0
 ) else (
     echo.
     echo [FAILED] Could not verify Agent process startup.
@@ -73,5 +78,3 @@ if "%IS_RUNNING%"=="1" (
     ping -n 4 127.0.0.1 >nul
     exit /b 1
 )
-
-ping -n 3 127.0.0.1 >nul

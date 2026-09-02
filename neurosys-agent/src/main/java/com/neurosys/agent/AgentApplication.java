@@ -2,6 +2,7 @@ package com.neurosys.agent;
 
 import com.neurosys.agent.config.AgentConfig;
 import com.neurosys.agent.scheduler.MetricsScheduler;
+import com.neurosys.agent.tray.AgentTrayManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +19,9 @@ public class AgentApplication {
         log.info("  Lab Name: {}", AgentConfig.getLabName());
         log.info("=================================================");
 
+        // Initialize Windows System Tray status indicator (if desktop UI supported)
+        AgentTrayManager.getInstance();
+
         MetricsScheduler scheduler = new MetricsScheduler();
         scheduler.start();
 
@@ -26,6 +30,7 @@ public class AgentApplication {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
             log.info("NeuroSys Agent service interrupted. Exiting gracefully.");
+            AgentTrayManager.getInstance().removeTrayIcon();
             Thread.currentThread().interrupt();
         }
     }
