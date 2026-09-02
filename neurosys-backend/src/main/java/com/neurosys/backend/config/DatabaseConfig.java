@@ -18,10 +18,19 @@ public class DatabaseConfig {
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
+    @Value("${spring.datasource.url:}")
+    private String springDatasourceUrl;
+
+    @Value("${spring.datasource.username:root}")
+    private String springDatasourceUsername;
+
+    @Value("${spring.datasource.password:}")
+    private String springDatasourcePassword;
+
     @Bean
     @Primary
     public DataSource dataSource() {
-        String rawUrl = System.getenv("SPRING_DATASOURCE_URL");
+        String rawUrl = springDatasourceUrl != null && !springDatasourceUrl.trim().isEmpty() ? springDatasourceUrl : System.getenv("SPRING_DATASOURCE_URL");
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
             rawUrl = System.getenv("MYSQL_PUBLIC_URL");
         }
@@ -35,29 +44,17 @@ public class DatabaseConfig {
             rawUrl = System.getenv("DATABASE_URL");
         }
 
-        String host = System.getenv("MYSQLHOST");
-        if (host == null || host.trim().isEmpty()) {
-            host = System.getenv("MYSQL_HOST");
-        }
-        String port = System.getenv("MYSQLPORT");
-        if (port == null || port.trim().isEmpty()) {
-            port = System.getenv("MYSQL_PORT");
-        }
-        String db = System.getenv("MYSQLDATABASE");
-        if (db == null || db.trim().isEmpty()) {
-            db = System.getenv("MYSQL_DATABASE");
-        }
-        String user = System.getenv("MYSQLUSER");
+        String user = springDatasourceUsername != null && !springDatasourceUsername.trim().isEmpty() ? springDatasourceUsername : System.getenv("MYSQLUSER");
         if (user == null || user.trim().isEmpty()) {
             user = System.getenv("MYSQL_USER");
         }
-        String pass = System.getenv("MYSQLPASSWORD");
+        String pass = springDatasourcePassword != null && !springDatasourcePassword.trim().isEmpty() ? springDatasourcePassword : System.getenv("MYSQLPASSWORD");
         if (pass == null || pass.trim().isEmpty()) {
             pass = System.getenv("MYSQL_PASSWORD");
         }
 
-        log.info("[DATABASE CONFIG] Profile: {}, Host: {}, Port: {}, DB: {}, User: {}, HasRawURL: {}, HasPass: {}",
-                activeProfile, host, port, db, user, (rawUrl != null && !rawUrl.isEmpty()), (pass != null && !pass.isEmpty()));
+        log.info("[DATABASE CONFIG] Profile: {}, URL: {}, User: {}, HasPass: {}",
+                activeProfile, rawUrl, user, (pass != null && !pass.isEmpty()));
 
         HikariConfig config = new HikariConfig();
         boolean configured = false;
@@ -66,8 +63,8 @@ public class DatabaseConfig {
         if (rawUrl != null && rawUrl.startsWith("jdbc:mysql://")) {
             log.info("[DATABASE CONFIG] Configuring Hikari DataSource with direct JDBC URL scheme");
             config.setJdbcUrl(rawUrl);
-            if (user != null) config.setUsername(user);
-            if (pass != null) config.setPassword(pass);
+            config.setUsername(user != null ? user : "root");
+            config.setPassword(pass != null ? pass : "");
             config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             configured = true;
         }
@@ -97,37 +94,19 @@ public class DatabaseConfig {
                 config.setDriverClassName("com.mysql.cj.jdbc.Driver");
                 configured = true;
             } catch (Exception e) {
-                log.error("Failed to parse raw MYSQL_URL: {}, falling back to host params", rawUrl, e);
+                log.error("Failed to parse raw MYSQL_URL: {}, falling back", rawUrl, e);
             }
         }
 
-        // 3. Railway Host Parameters
-        if (!configured && host != null && !host.trim().isEmpty()) {
-            String jdbcUrl = String.format("jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-                    host, port != null ? port : "3306", db != null ? db : "railway");
-            log.info("[DATABASE CONFIG] Configured Hikari DataSource with Host Params (Host: {}, DB: {})", host, db != null ? db : "railway");
-            config.setJdbcUrl(jdbcUrl);
-            config.setUsername(user != null ? user : "root");
-            config.setPassword(pass != null ? pass : "");
-            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
-            configured = true;
-        }
-
-        // 4. Default Environment Handling
+        // 3. Fallback
         if (!configured) {
             if ("prod".equalsIgnoreCase(activeProfile)) {
                 String railwayHost = "mysql.railway.internal";
-                String railwayPort = port != null ? port : "3306";
-                String railwayDb = db != null ? db : "railway";
-                String railwayUser = user != null ? user : "root";
-                String railwayPass = pass != null ? pass : "";
-
-                String jdbcUrl = String.format("jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-                        railwayHost, railwayPort, railwayDb);
-                log.info("[DATABASE CONFIG] Prod Profile: Target Railway MySQL Internal Networking (Host: {}, DB: {})", railwayHost, railwayDb);
+                String jdbcUrl = String.format("jdbc:mysql://%s:3306/railway?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC", railwayHost);
+                log.info("[DATABASE CONFIG] Prod Profile: Target Railway MySQL Internal Networking ({})", jdbcUrl);
                 config.setJdbcUrl(jdbcUrl);
-                config.setUsername(railwayUser);
-                config.setPassword(railwayPass);
+                config.setUsername(user != null ? user : "root");
+                config.setPassword(pass != null ? pass : "");
                 config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             } else {
                 String localUrl = "jdbc:mysql://localhost:3306/railway?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
