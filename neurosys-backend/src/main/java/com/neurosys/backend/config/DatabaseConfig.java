@@ -21,8 +21,6 @@ public class DatabaseConfig {
     @Bean
     @Primary
     public DataSource dataSource() {
-        log.info("[DATABASE CONFIG] Active Spring Profile: {}", activeProfile);
-
         String rawUrl = System.getenv("SPRING_DATASOURCE_URL");
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
             rawUrl = System.getenv("MYSQL_PUBLIC_URL");
@@ -57,6 +55,9 @@ public class DatabaseConfig {
         if (pass == null || pass.trim().isEmpty()) {
             pass = System.getenv("MYSQL_PASSWORD");
         }
+
+        log.info("[DATABASE CONFIG] Profile: {}, Host: {}, Port: {}, DB: {}, User: {}, HasRawURL: {}, HasPass: {}",
+                activeProfile, host, port, db, user, (rawUrl != null && !rawUrl.isEmpty()), (pass != null && !pass.isEmpty()));
 
         HikariConfig config = new HikariConfig();
         boolean configured = false;
