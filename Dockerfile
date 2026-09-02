@@ -23,6 +23,7 @@ WORKDIR /app
 COPY --from=backend-build /app/neurosys-backend/target/neurosys-backend-1.0.0-SNAPSHOT.jar app.jar
 
 ENV PORT=8080
+ENV SPRING_PROFILES_ACTIVE=prod
 EXPOSE 8080
 
 # Restrict JVM Heap to fit within Railway 512MB RAM Limit

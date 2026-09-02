@@ -3,6 +3,7 @@ package com.neurosys.backend.config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -14,15 +15,26 @@ import java.net.URI;
 @Configuration
 public class DatabaseConfig {
 
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
     @Bean
     @Primary
     public DataSource dataSource() {
+        log.info("[DATABASE CONFIG] Active Profile: {}", activeProfile);
+
         String rawUrl = System.getenv("SPRING_DATASOURCE_URL");
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
             rawUrl = System.getenv("MYSQL_PUBLIC_URL");
         }
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
             rawUrl = System.getenv("MYSQL_URL");
+        }
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
+            rawUrl = System.getenv("MYSQLPRIVATEURL");
+        }
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
+            rawUrl = System.getenv("DATABASE_URL");
         }
 
         String host = System.getenv("MYSQLHOST");
@@ -51,7 +63,7 @@ public class DatabaseConfig {
 
         // 1. Direct JDBC URL
         if (rawUrl != null && rawUrl.startsWith("jdbc:mysql://")) {
-            log.info("Configuring Hikari DataSource with direct JDBC URL: {}", rawUrl);
+            log.info("[DATABASE CONFIG] Configuring Hikari DataSource with direct JDBC URL scheme to host/db");
             config.setJdbcUrl(rawUrl);
             if (user != null) config.setUsername(user);
             if (pass != null) config.setPassword(pass);
@@ -77,7 +89,7 @@ public class DatabaseConfig {
 
                 String jdbcUrl = String.format("jdbc:mysql://%s:%d/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
                         hostName, portNum, dbName);
-                log.info("Parsed Railway MYSQL_URL -> JDBC: {}, User: {}", jdbcUrl, username);
+                log.info("[DATABASE CONFIG] Configured Railway MySQL DataSource (Host: {}, Port: {}, DB: {})", hostName, portNum, dbName);
                 config.setJdbcUrl(jdbcUrl);
                 config.setUsername(username);
                 config.setPassword(password);
@@ -92,7 +104,7 @@ public class DatabaseConfig {
         if (!configured && host != null && !host.trim().isEmpty()) {
             String jdbcUrl = String.format("jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
                     host, port != null ? port : "3306", db != null ? db : "railway");
-            log.info("Configuring Hikari DataSource with Host Params: {}", jdbcUrl);
+            log.info("[DATABASE CONFIG] Configured Hikari DataSource with Host Params (Host: {}, DB: {})", host, db != null ? db : "railway");
             config.setJdbcUrl(jdbcUrl);
             config.setUsername(user != null ? user : "root");
             config.setPassword(pass != null ? pass : "Karthik@2005");
@@ -100,10 +112,16 @@ public class DatabaseConfig {
             configured = true;
         }
 
-        // 4. Default Fallback -> Local MySQL (100% MySQL, NO H2!)
+        // 4. Handle Unconfigured State
         if (!configured) {
+            if ("prod".equalsIgnoreCase(activeProfile)) {
+                log.error("[CRITICAL ERROR] Production profile active, but NO Railway MySQL environment variables found! Failing startup safely.");
+                throw new IllegalStateException("CRITICAL CONFIGURATION ERROR: Production profile active but no Railway MySQL environment variables found! (Missing MYSQLHOST / MYSQL_PUBLIC_URL / SPRING_DATASOURCE_URL)");
+            }
+
+            // Local Development Profile Fallback
             String localUrl = "jdbc:mysql://localhost:3306/railway?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-            log.info("Configuring default local MySQL DataSource: {}", localUrl);
+            log.info("[DATABASE CONFIG] Dev Profile: Configuring local MySQL DataSource (jdbc:mysql://localhost:3306/railway)");
             config.setJdbcUrl(localUrl);
             config.setUsername(user != null ? user : "root");
             config.setPassword(pass != null ? pass : "Karthik@2005");
