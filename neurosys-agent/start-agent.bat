@@ -31,13 +31,13 @@ if not defined ACTIVE_JAR (
     exit /b 1
 )
 
-:: 3. Register Windows Auto-Boot Scheduled Task & Startup Shortcut Backup
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$TaskName = 'NeuroSysAgent'; $ScriptDir = '%~dp0'; $BatLauncher = Join-Path $ScriptDir 'Run-NeuroSys-Agent.bat'; try { if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) { $Action = New-ScheduledTaskAction -Execute 'cmd.exe' -ArgumentList \"/c `\"$BatLauncher`\"\" -WorkingDirectory $ScriptDir; $TriggerLogon = New-ScheduledTaskTrigger -AtLogon; $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null } } catch {}; try { $StartupFolder = [Environment]::GetFolderPath('Startup'); $ShortcutPath = Join-Path $StartupFolder 'NeuroSysAgent.lnk'; if (-not (Test-Path $ShortcutPath)) { $WScriptShell = New-Object -ComObject WScript.Shell; $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath); $Shortcut.TargetPath = $BatLauncher; $Shortcut.WorkingDirectory = $ScriptDir; $Shortcut.WindowStyle = 7; $Shortcut.Save() } } catch {}" >nul 2>&1
+:: 3. Register Windows Silent Auto-Boot Scheduled Task & Startup Shortcut Backup
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$TaskName = 'NeuroSysAgent'; $ScriptDir = '%~dp0'; $WScriptExe = Join-Path $env:SystemRoot 'System32\wscript.exe'; $SilentVbs = Join-Path $ScriptDir 'Run-Silent.vbs'; $BatLauncher = Join-Path $ScriptDir 'Run-NeuroSys-Agent.bat'; try { if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) { $Action = New-ScheduledTaskAction -Execute $WScriptExe -ArgumentList \"`\"$SilentVbs`\" `\"$BatLauncher`\"\" -WorkingDirectory $ScriptDir; $TriggerLogon = New-ScheduledTaskTrigger -AtLogon; $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $TriggerLogon -Settings $Settings -User $env:USERNAME -Force | Out-Null } } catch {}; try { $StartupFolder = [Environment]::GetFolderPath('Startup'); $ShortcutPath = Join-Path $StartupFolder 'NeuroSysAgent.lnk'; if (-not (Test-Path $ShortcutPath)) { $WScriptShell = New-Object -ComObject WScript.Shell; $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath); $Shortcut.TargetPath = $WScriptExe; $Shortcut.Arguments = \"`\"$SilentVbs`\" `\"$BatLauncher`\"\"; $Shortcut.WorkingDirectory = $ScriptDir; $Shortcut.WindowStyle = 7; $Shortcut.Save() } } catch {}" >nul 2>&1
 
 :: 4. Check if already running
 for /f "tokens=*" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -like '*neurosys-agent*' } | Select-Object -ExpandProperty ProcessId"') do (
     if not "%%P"=="" (
-        echo NeuroSys Agent
+        echo NeuroSys Agent is running silently in the background.
         echo Status: RUNNING
         echo.
         ping -n 3 127.0.0.1 >nul
@@ -45,9 +45,9 @@ for /f "tokens=*" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Comman
     )
 )
 
-:: 5. Start Scheduled Task or Background Process
-echo Starting NeuroSys Agent...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue) { Start-ScheduledTask -TaskName 'NeuroSysAgent' } else { Start-Process 'javaw.exe' -ArgumentList '-jar', '`"%ACTIVE_JAR%`"' -WorkingDirectory '%~dp0' }" >nul 2>&1
+:: 5. Start Silent Background Daemon
+echo Starting NeuroSys Agent silently in the background...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-ScheduledTask -TaskName 'NeuroSysAgent' -ErrorAction SilentlyContinue) { Start-ScheduledTask -TaskName 'NeuroSysAgent' } else { wscript.exe '%~dp0Run-Silent.vbs' '%~dp0Run-NeuroSys-Agent.bat' }" >nul 2>&1
 
 :: Wait 3 seconds for JVM startup
 ping -n 4 127.0.0.1 >nul
@@ -60,8 +60,10 @@ for /f "tokens=*" %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Comman
 
 if "%IS_RUNNING%"=="1" (
     echo.
-    echo NeuroSys Agent
+    echo NeuroSys Agent is running silently in the background.
     echo Status: RUNNING
+    echo.
+    echo (This control window will close automatically. The Agent will continue running silently.)
     echo.
 ) else (
     echo.

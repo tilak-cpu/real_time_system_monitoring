@@ -14,6 +14,8 @@ Write-Host "[1/5] Checking files..." -NoNewline
 $JarPath = Join-Path $ScriptDir "neurosys-agent-1.0.0-SNAPSHOT-exec.jar"
 $TargetJar = Join-Path $ScriptDir "target\neurosys-agent-1.0.0-SNAPSHOT-exec.jar"
 $BatLauncher = Join-Path $ScriptDir "Run-NeuroSys-Agent.bat"
+$SilentVbs = Join-Path $ScriptDir "Run-Silent.vbs"
+$WScriptExe = Join-Path $env:SystemRoot "System32\wscript.exe"
 
 if (-not (Test-Path $JarPath)) {
     if (Test-Path $TargetJar) {
@@ -42,13 +44,14 @@ agent.cache.dir=./cache
 
 # [2/5] Checking Java...
 Write-Host "[2/5] Checking Java..." -NoNewline
-$BundledJava = Join-Path $ScriptDir "jre\bin\java.exe"
+$BundledJava = Join-Path $ScriptDir "jre\bin\javaw.exe"
 $JavaExe = $null
 
 if (Test-Path $BundledJava) {
     $JavaExe = $BundledJava
 } else {
-    $SystemJava = Get-Command "java" -ErrorAction SilentlyContinue
+    $SystemJava = Get-Command "javaw" -ErrorAction SilentlyContinue
+    if (-not $SystemJava) { $SystemJava = Get-Command "java" -ErrorAction SilentlyContinue }
     if ($SystemJava) {
         $JavaExe = $SystemJava.Source
     }
@@ -63,13 +66,13 @@ if (-not $JavaExe) {
 Write-Host " [OK] Java found." -ForegroundColor Green
 
 # [3/5] Registering Auto-Boot Scheduled Task...
-Write-Host "[3/5] Registering Auto-Boot Scheduled Task..." -NoNewline
+Write-Host "[3/5] Registering Silent Auto-Boot Scheduled Task..." -NoNewline
 $TaskName = "NeuroSysAgent"
 
 try {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     
-    $Action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$BatLauncher`"" -WorkingDirectory $ScriptDir
+    $Action = New-ScheduledTaskAction -Execute $WScriptExe -Argument "`"$SilentVbs`" `"$BatLauncher`"" -WorkingDirectory $ScriptDir
     $TriggerStartup = New-ScheduledTaskTrigger -AtStartup
     $TriggerLogon = New-ScheduledTaskTrigger -AtLogon
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Hours 0)
@@ -103,39 +106,40 @@ try {
 }
 
 # [4/5] Adding Windows Startup Shortcut Backup...
-Write-Host "[4/5] Setting up Windows Startup Auto-Boot..." -NoNewline
+Write-Host "[4/5] Setting up Silent Windows Startup Auto-Boot..." -NoNewline
 try {
     $StartupFolder = [Environment]::GetFolderPath("Startup")
     $ShortcutPath = Join-Path $StartupFolder "NeuroSysAgent.lnk"
     
     $WScriptShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath)
-    $Shortcut.TargetPath = $BatLauncher
+    $Shortcut.TargetPath = $WScriptExe
+    $Shortcut.Arguments = "`"$SilentVbs`" `"$BatLauncher`""
     $Shortcut.WorkingDirectory = $ScriptDir
     $Shortcut.WindowStyle = 7 # Minimized
     $Shortcut.Description = "NeuroSys Real-Time Monitoring Agent Daemon"
     $Shortcut.Save()
-    Write-Host " [OK] Startup shortcut created." -ForegroundColor Green
+    Write-Host " [OK] Silent Startup shortcut created." -ForegroundColor Green
 } catch {
     Write-Host " [WARNING] Could not create startup shortcut: $_" -ForegroundColor Yellow
 }
 
-# [5/5] Launching Agent Daemon...
-Write-Host "[5/5] Launching Agent Daemon..." -NoNewline
+# [5/5] Launching Silent Agent Daemon...
+Write-Host "[5/5] Launching Silent Agent Daemon..." -NoNewline
 try {
     Start-ScheduledTask -TaskName $TaskName | Out-Null
     Start-Sleep -Seconds 2
-    Write-Host " [OK] Agent launched." -ForegroundColor Green
+    Write-Host " [OK] Silent Agent launched." -ForegroundColor Green
 } catch {
-    # Fallback start via cmd
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$BatLauncher`"" -WorkingDirectory $ScriptDir -WindowStyle Minimized
-    Write-Host " [OK] Agent launched via process." -ForegroundColor Green
+    # Fallback start via wscript
+    Start-Process -FilePath $WScriptExe -ArgumentList "`"$SilentVbs`" `"$BatLauncher`"" -WorkingDirectory $ScriptDir
+    Write-Host " [OK] Silent Agent launched via background worker." -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host " Setup completed successfully!" -ForegroundColor Green
-Write-Host " The Agent will automatically start when Windows boots up" -ForegroundColor Green
-Write-Host " and instantly reconnect the computer ONLINE!" -ForegroundColor Green
+Write-Host " The Agent runs silently in the background with NO window to close." -ForegroundColor Green
+Write-Host " It will automatically start whenever Windows turns ON." -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host ""
